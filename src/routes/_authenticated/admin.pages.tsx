@@ -1,0 +1,75 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { slugify } from "@/lib/format";
+import { Plus, Trash2, Pencil } from "lucide-react";
+
+export const Route = createFileRoute("/_authenticated/admin/pages")({
+  component: AdminPages,
+});
+
+function AdminPages() {
+  const qc = useQueryClient();
+  const [editing, setEditing] = useState<any | null>(null);
+  const [open, setOpen] = useState(false);
+  const { data } = useQuery({
+    queryKey: ["admin", "pages"],
+    queryFn: async () => (await supabase.from("pages").select("*").order("updated_at", { ascending: false })).data ?? [],
+  });
+  const save = useMutation({
+    mutationFn: async (p: any) => {
+      const payload = { ...p, slug: p.slug || slugify(p.title) };
+      if (p.id) { const { error } = await supabase.from("pages").update(payload).eq("id", p.id); if (error) throw error; }
+      else { const { error } = await supabase.from("pages").insert(payload); if (error) throw error; }
+    },
+    onSuccess: () => { toast.success("Saved"); qc.invalidateQueries({ queryKey: ["admin", "pages"] }); setOpen(false); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const del = useMutation({
+    mutationFn: async (id: string) => { const { error } = await supabase.from("pages").delete().eq("id", id); if (error) throw error; },
+    onSuccess: () => { toast.success("Deleted"); qc.invalidateQueries({ queryKey: ["admin", "pages"] }); },
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold">Pages</h1>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild><Button onClick={() => setEditing({ title: "", slug: "", body: "", is_published: true })}><Plus className="h-4 w-4 mr-2" />New page</Button></DialogTrigger>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader><DialogTitle>{editing?.id ? "Edit" : "New"} page</DialogTitle></DialogHeader>
+            {editing ? (
+              <div className="space-y-3">
+                <div><Label>Title</Label><Input value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })} /></div>
+                <div><Label>Slug</Label><Input value={editing.slug} onChange={(e) => setEditing({ ...editing, slug: e.target.value })} placeholder="auto" /></div>
+                <div><Label>Body</Label><Textarea rows={10} value={editing.body} onChange={(e) => setEditing({ ...editing, body: e.target.value })} /></div>
+                <div className="flex items-center gap-2"><Switch checked={editing.is_published} onCheckedChange={(v) => setEditing({ ...editing, is_published: v })} /><Label>Published</Label></div>
+              </div>
+            ) : null}
+            <DialogFooter><Button onClick={() => save.mutate(editing)}>Save</Button></DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+      <div className="border rounded-lg divide-y">
+        {data?.map((p) => (
+          <div key={p.id} className="flex justify-between items-center p-3">
+            <div><div className="font-medium">{p.title}</div><div className="text-xs text-muted-foreground">/pages/{p.slug} · {p.is_published ? "published" : "draft"}</div></div>
+            <div className="flex gap-1">
+              <Button variant="ghost" size="icon" onClick={() => { setEditing(p); setOpen(true); }}><Pencil className="h-4 w-4" /></Button>
+              <Button variant="ghost" size="icon" onClick={() => confirm("Delete?") && del.mutate(p.id)}><Trash2 className="h-4 w-4" /></Button>
+            </div>
+          </div>
+        ))}
+        {!data?.length ? <p className="p-8 text-center text-muted-foreground">No pages yet.</p> : null}
+      </div>
+    </div>
+  );
+}

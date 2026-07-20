@@ -1,0 +1,190 @@
+import { useState } from "react";
+import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { slugify } from "@/lib/format";
+import { Trash2, Upload, Plus } from "lucide-react";
+
+type Product = any;
+
+export function ProductEditor({ initial, onSaved }: { initial: Product | null; onSaved?: (id: string) => void }) {
+  const qc = useQueryClient();
+  const [p, setP] = useState<any>(
+    initial ?? {
+      slug: "",
+      title: "",
+      description: "",
+      short_description: "",
+      price_cents: 0,
+      compare_at_cents: null,
+      currency: "USD",
+      category_id: null,
+      status: "draft",
+      images: [],
+      stock: 0,
+      sku: "",
+      is_featured: false,
+      tags: [],
+      seo: {},
+    },
+  );
+  const [variants, setVariants] = useState<any[]>(initial?.product_variants ?? []);
+  const [uploading, setUploading] = useState(false);
+
+  const { data: categories } = useQuery({
+    queryKey: ["categories", "admin"],
+    queryFn: async () => (await supabase.from("categories").select("id, name").order("name")).data ?? [],
+  });
+
+  const upd = (k: string) => (e: any) => setP((prev: any) => ({ ...prev, [k]: e.target?.value ?? e }));
+
+  const save = useMutation({
+    mutationFn: async () => {
+      const payload: any = { ...p };
+      if (!payload.slug) payload.slug = slugify(payload.title);
+      payload.price_cents = Number(payload.price_cents) || 0;
+      payload.compare_at_cents = payload.compare_at_cents ? Number(payload.compare_at_cents) : null;
+      payload.stock = Number(payload.stock) || 0;
+      let productId = initial?.id;
+      if (initial) {
+        const { error } = await supabase.from("products").update(payload).eq("id", initial.id);
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabase.from("products").insert(payload).select().single();
+        if (error) throw error;
+        productId = data.id;
+      }
+      // sync variants
+      const existingIds = initial?.product_variants?.map((v: any) => v.id) ?? [];
+      const keptIds = variants.filter((v) => v.id).map((v) => v.id);
+      const toDelete = existingIds.filter((id: string) => !keptIds.includes(id));
+      if (toDelete.length) await supabase.from("product_variants").delete().in("id", toDelete);
+      for (const v of variants) {
+        const vp: any = {
+          product_id: productId,
+          name: v.name,
+          sku: v.sku ?? null,
+          price_cents: v.price_cents ? Number(v.price_cents) : null,
+          stock: Number(v.stock) || 0,
+          option_values: v.option_values ?? {},
+        };
+        if (v.id) await supabase.from("product_variants").update(vp).eq("id", v.id);
+        else await supabase.from("product_variants").insert(vp);
+      }
+      return productId!;
+    },
+    onSuccess: (id) => {
+      toast.success("Saved");
+      qc.invalidateQueries({ queryKey: ["admin", "products"] });
+      qc.invalidateQueries({ queryKey: ["admin", "product", id] });
+      onSaved?.(id);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const uploadImage = async (file: File) => {
+    setUploading(true);
+    try {
+      const path = `products/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
+      const { error } = await supabase.storage.from("store-media").upload(path, file);
+      if (error) throw error;
+      const { data: signed } = await supabase.storage.from("store-media").createSignedUrl(path, 60 * 60 * 24 * 365 * 10);
+      const url = signed?.signedUrl;
+      if (!url) throw new Error("Could not get URL");
+      setP((prev: any) => ({ ...prev, images: [...(prev.images ?? []), url] }));
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="grid md:grid-cols-2 gap-4">
+        <div><Label>Title</Label><Input value={p.title} onChange={upd("title")} /></div>
+        <div><Label>Slug</Label><Input value={p.slug} onChange={upd("slug")} placeholder="auto from title" /></div>
+        <div className="md:col-span-2"><Label>Short description</Label><Input value={p.short_description ?? ""} onChange={upd("short_description")} /></div>
+        <div className="md:col-span-2"><Label>Description</Label><Textarea rows={6} value={p.description ?? ""} onChange={upd("description")} /></div>
+        <div><Label>Price (cents)</Label><Input type="number" value={p.price_cents} onChange={upd("price_cents")} /></div>
+        <div><Label>Compare-at price (cents)</Label><Input type="number" value={p.compare_at_cents ?? ""} onChange={(e) => setP((prev: any) => ({ ...prev, compare_at_cents: e.target.value }))} /></div>
+        <div><Label>Currency</Label><Input value={p.currency} onChange={upd("currency")} /></div>
+        <div><Label>SKU</Label><Input value={p.sku ?? ""} onChange={upd("sku")} /></div>
+        <div><Label>Stock</Label><Input type="number" value={p.stock} onChange={upd("stock")} /></div>
+        <div>
+          <Label>Category</Label>
+          <Select value={p.category_id ?? "none"} onValueChange={(v) => setP((prev: any) => ({ ...prev, category_id: v === "none" ? null : v }))}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">None</SelectItem>
+              {categories?.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label>Status</Label>
+          <Select value={p.status} onValueChange={(v) => setP((prev: any) => ({ ...prev, status: v }))}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="draft">Draft</SelectItem>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="archived">Archived</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-center gap-2 pt-6">
+          <Switch checked={p.is_featured} onCheckedChange={(v) => setP((prev: any) => ({ ...prev, is_featured: v }))} />
+          <Label>Featured on homepage</Label>
+        </div>
+      </div>
+
+      <div>
+        <Label>Images</Label>
+        <div className="grid grid-cols-4 gap-2 mt-2">
+          {(p.images ?? []).map((img: any, i: number) => (
+            <div key={i} className="relative aspect-square rounded border overflow-hidden">
+              <img src={typeof img === "string" ? img : img.url} className="w-full h-full object-cover" alt="" />
+              <button
+                onClick={() => setP((prev: any) => ({ ...prev, images: prev.images.filter((_: any, idx: number) => idx !== i) }))}
+                className="absolute top-1 right-1 bg-black/60 text-white rounded p-1"
+              ><Trash2 className="h-3 w-3" /></button>
+            </div>
+          ))}
+          <label className="aspect-square rounded border-2 border-dashed flex items-center justify-center cursor-pointer hover:bg-muted">
+            <Upload className="h-6 w-6 text-muted-foreground" />
+            <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && uploadImage(e.target.files[0])} />
+          </label>
+        </div>
+        {uploading ? <p className="text-xs text-muted-foreground mt-1">Uploading…</p> : null}
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <Label>Variants (optional)</Label>
+          <Button variant="outline" size="sm" onClick={() => setVariants((v) => [...v, { name: "", stock: 0 }])}>
+            <Plus className="h-3 w-3 mr-1" />Add variant
+          </Button>
+        </div>
+        <div className="space-y-2">
+          {variants.map((v, i) => (
+            <div key={i} className="grid grid-cols-12 gap-2 items-center">
+              <Input className="col-span-4" placeholder="Name (e.g. Small / Red)" value={v.name} onChange={(e) => setVariants((prev) => prev.map((x, idx) => idx === i ? { ...x, name: e.target.value } : x))} />
+              <Input className="col-span-2" placeholder="SKU" value={v.sku ?? ""} onChange={(e) => setVariants((prev) => prev.map((x, idx) => idx === i ? { ...x, sku: e.target.value } : x))} />
+              <Input className="col-span-3" type="number" placeholder="Price override (cents)" value={v.price_cents ?? ""} onChange={(e) => setVariants((prev) => prev.map((x, idx) => idx === i ? { ...x, price_cents: e.target.value } : x))} />
+              <Input className="col-span-2" type="number" placeholder="Stock" value={v.stock ?? 0} onChange={(e) => setVariants((prev) => prev.map((x, idx) => idx === i ? { ...x, stock: e.target.value } : x))} />
+              <Button variant="ghost" size="icon" className="col-span-1" onClick={() => setVariants((prev) => prev.filter((_, idx) => idx !== i))}><Trash2 className="h-4 w-4" /></Button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <Button onClick={() => save.mutate()} disabled={save.isPending}>{save.isPending ? "Saving…" : "Save product"}</Button>
+    </div>
+  );
+}
