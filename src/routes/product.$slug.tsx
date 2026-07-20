@@ -51,7 +51,7 @@ function ProductPage() {
   const price = variant?.price_cents ?? product.price_cents;
   const stock = variant ? variant.stock : product.stock;
   const currency = product.currency ?? settings?.currency ?? "USD";
-  const heroImg = images[selectedImage];
+  const heroImg: any = images[selectedImage];
 
   const handleAdd = () => {
     if (product.product_variants?.length > 0 && !selectedVariant) {
