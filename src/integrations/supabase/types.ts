@@ -311,7 +311,7 @@ export type Database = {
           total_cents: number
           tracking_number: string | null
           updated_at: string
-          user_id: string | null
+          user_id: string
         }
         Insert: {
           billing_address?: Json
@@ -332,7 +332,7 @@ export type Database = {
           total_cents?: number
           tracking_number?: string | null
           updated_at?: string
-          user_id?: string | null
+          user_id: string
         }
         Update: {
           billing_address?: Json
@@ -353,7 +353,7 @@ export type Database = {
           total_cents?: number
           tracking_number?: string | null
           updated_at?: string
-          user_id?: string | null
+          user_id?: string
         }
         Relationships: []
       }
