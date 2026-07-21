@@ -19,6 +19,7 @@ const PRODUCT_COLUMNS = [
   "price_cents", "compare_at_cents", "currency", "category_id",
   "status", "images", "tags", "stock", "sku", "weight_grams",
   "seo", "is_featured",
+  "tax_rate_id", "price_includes_tax", "fee_category_id",
 ];
 
 // UI works in rupees (float). DB stores paise (integer).
@@ -41,6 +42,7 @@ export function ProductEditor({ initial, onSaved }: { initial: Product | null; o
       price_cents: 0, compare_at_cents: null, currency: "INR",
       category_id: null, status: "draft", images: [], stock: 0,
       sku: "", is_featured: false, tags: [], seo: {},
+      tax_rate_id: null, price_includes_tax: false, fee_category_id: null,
     };
     return {
       ...base,
@@ -61,6 +63,14 @@ export function ProductEditor({ initial, onSaved }: { initial: Product | null; o
   const { data: categories } = useQuery({
     queryKey: ["categories", "admin"],
     queryFn: async () => (await supabase.from("categories").select("id, name").order("name")).data ?? [],
+  });
+  const { data: taxRates } = useQuery({
+    queryKey: ["tax-rates", "admin"],
+    queryFn: async () => (await supabase.from("tax_rates").select("id, name, rate_percent").order("name")).data ?? [],
+  });
+  const { data: feeCategories } = useQuery({
+    queryKey: ["fee-categories", "admin"],
+    queryFn: async () => (await supabase.from("fee_categories").select("id, name").order("name")).data ?? [],
   });
 
   const upd = (k: string) => (e: any) => setP((prev: any) => ({ ...prev, [k]: e.target?.value ?? e }));
@@ -186,6 +196,39 @@ export function ProductEditor({ initial, onSaved }: { initial: Product | null; o
           <Label>Featured on homepage</Label>
         </div>
       </div>
+
+      <div className="border-t pt-6 space-y-3">
+        <h3 className="font-semibold">Tax & fees</h3>
+        <div className="grid md:grid-cols-2 gap-4">
+          <div>
+            <Label>Tax rate</Label>
+            <Select value={p.tax_rate_id ?? "none"} onValueChange={(v) => setP((prev: any) => ({ ...prev, tax_rate_id: v === "none" ? null : v }))}>
+              <SelectTrigger><SelectValue placeholder="No tax" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No tax</SelectItem>
+                {taxRates?.map((t: any) => <SelectItem key={t.id} value={t.id}>{t.name} ({t.rate_percent}%)</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1">Leave as "No tax" to hide the tax line at checkout.</p>
+          </div>
+          <div>
+            <Label>Fee category</Label>
+            <Select value={p.fee_category_id ?? "none"} onValueChange={(v) => setP((prev: any) => ({ ...prev, fee_category_id: v === "none" ? null : v }))}>
+              <SelectTrigger><SelectValue placeholder="No fee" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No fee</SelectItem>
+                {feeCategories?.map((f: any) => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1">Manage in Admin → Fees.</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Switch checked={!!p.price_includes_tax} onCheckedChange={(v) => setP((prev: any) => ({ ...prev, price_includes_tax: v }))} />
+          <Label>Price includes tax (inclusive)</Label>
+        </div>
+      </div>
+
 
       <div>
         <Label>Images</Label>

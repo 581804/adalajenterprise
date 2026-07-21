@@ -230,6 +230,56 @@ export type Database = {
         }
         Relationships: []
       }
+      fee_categories: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          percent: number
+          scope: string
+          tax_rate_id: string | null
+          taxable: boolean
+          updated_at: string
+        }
+        Insert: {
+          amount_cents?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          percent?: number
+          scope?: string
+          tax_rate_id?: string | null
+          taxable?: boolean
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          percent?: number
+          scope?: string
+          tax_rate_id?: string | null
+          taxable?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fee_categories_tax_rate_id_fkey"
+            columns: ["tax_rate_id"]
+            isOneToOne: false
+            referencedRelation: "tax_rates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       order_items: {
         Row: {
           created_at: string
@@ -299,6 +349,7 @@ export type Database = {
           discount_cents: number
           discount_code: string | null
           email: string
+          fee_cents: number
           id: string
           notes: string | null
           order_number: string
@@ -320,6 +371,7 @@ export type Database = {
           discount_cents?: number
           discount_code?: string | null
           email: string
+          fee_cents?: number
           id?: string
           notes?: string | null
           order_number?: string
@@ -341,6 +393,7 @@ export type Database = {
           discount_cents?: number
           discount_code?: string | null
           email?: string
+          fee_cents?: number
           id?: string
           notes?: string | null
           order_number?: string
@@ -447,10 +500,12 @@ export type Database = {
           created_at: string
           currency: string
           description: string | null
+          fee_category_id: string | null
           id: string
           images: Json
           is_featured: boolean
           price_cents: number
+          price_includes_tax: boolean
           seo: Json
           short_description: string | null
           sku: string | null
@@ -458,6 +513,7 @@ export type Database = {
           status: Database["public"]["Enums"]["product_status"]
           stock: number
           tags: string[]
+          tax_rate_id: string | null
           title: string
           updated_at: string
           weight_grams: number | null
@@ -468,10 +524,12 @@ export type Database = {
           created_at?: string
           currency?: string
           description?: string | null
+          fee_category_id?: string | null
           id?: string
           images?: Json
           is_featured?: boolean
           price_cents?: number
+          price_includes_tax?: boolean
           seo?: Json
           short_description?: string | null
           sku?: string | null
@@ -479,6 +537,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["product_status"]
           stock?: number
           tags?: string[]
+          tax_rate_id?: string | null
           title: string
           updated_at?: string
           weight_grams?: number | null
@@ -489,10 +548,12 @@ export type Database = {
           created_at?: string
           currency?: string
           description?: string | null
+          fee_category_id?: string | null
           id?: string
           images?: Json
           is_featured?: boolean
           price_cents?: number
+          price_includes_tax?: boolean
           seo?: Json
           short_description?: string | null
           sku?: string | null
@@ -500,6 +561,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["product_status"]
           stock?: number
           tags?: string[]
+          tax_rate_id?: string | null
           title?: string
           updated_at?: string
           weight_grams?: number | null
@@ -510,6 +572,20 @@ export type Database = {
             columns: ["category_id"]
             isOneToOne: false
             referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_fee_category_id_fkey"
+            columns: ["fee_category_id"]
+            isOneToOne: false
+            referencedRelation: "fee_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_tax_rate_id_fkey"
+            columns: ["tax_rate_id"]
+            isOneToOne: false
+            referencedRelation: "tax_rates"
             referencedColumns: ["id"]
           },
         ]
