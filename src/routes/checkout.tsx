@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { SiteHeader } from "@/components/site-header";
@@ -16,54 +17,148 @@ export const Route = createFileRoute("/checkout")({
   component: CheckoutPage,
 });
 
+type ProductMeta = {
+  id: string;
+  tax_rate_id: string | null;
+  price_includes_tax: boolean;
+  fee_category_id: string | null;
+  tax_rates: { id: string; rate_percent: number; name: string } | null;
+  fee_categories:
+    | {
+        id: string;
+        name: string;
+        amount_cents: number;
+        percent: number;
+        scope: "per_unit" | "per_order";
+        taxable: boolean;
+        tax_rate_id: string | null;
+      }
+    | null;
+};
+
 function CheckoutPage() {
   const { items, subtotal, clear } = useCart();
   const { user, loading } = useSession();
   const { data: settings } = useSiteSettingsOptional();
   const navigate = useNavigate();
   const [submitting, setSubmitting] = useState(false);
-  const currency = settings?.currency ?? "USD";
+  const currency = settings?.currency ?? "INR";
 
-  const [form, setForm] = useState({
-    full_name: "",
-    email: user?.email ?? "",
-    line1: "",
-    line2: "",
-    city: "",
-    region: "",
-    postal_code: "",
-    country: "",
-    phone: "",
+  const productIds = useMemo(() => Array.from(new Set(items.map((i) => i.product_id))), [items]);
+
+  const { data: productMeta } = useQuery({
+    queryKey: ["checkout-product-meta", productIds],
+    enabled: productIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("products")
+        .select(
+          "id, tax_rate_id, price_includes_tax, fee_category_id, tax_rates:tax_rate_id(id, name, rate_percent), fee_categories:fee_category_id(id, name, amount_cents, percent, scope, taxable, tax_rate_id)",
+        )
+        .in("id", productIds);
+      if (error) throw error;
+      return (data ?? []) as unknown as ProductMeta[];
+    },
   });
 
+  const [form, setForm] = useState({
+    full_name: "", email: user?.email ?? "",
+    line1: "", line2: "", city: "", region: "", postal_code: "", country: "", phone: "",
+  });
+  useEffect(() => {
+    if (user?.email && !form.email) setForm((f) => ({ ...f, email: user.email! }));
+  }, [user]);
   const upd = (k: keyof typeof form) => (e: any) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  // Compute totals from authoritative product data.
+  const totals = useMemo(() => {
+    const metaById = new Map<string, ProductMeta>();
+    (productMeta ?? []).forEach((m) => metaById.set(m.id, m));
+
+    let taxExclusive = 0; // added on top
+    let taxInclusive = 0; // informational
+    let feeTotal = 0;
+    let feeTaxExclusive = 0;
+    let feeTaxInclusive = 0;
+
+    // per-order fees only counted once per fee_category
+    const perOrderFees = new Map<string, ProductMeta["fee_categories"]>();
+
+    for (const item of items) {
+      const meta = metaById.get(item.product_id);
+      const lineSubtotal = item.unit_price_cents * item.quantity;
+      const taxPct = meta?.tax_rates?.rate_percent ?? 0;
+
+      if (taxPct > 0) {
+        if (meta?.price_includes_tax) {
+          // tax portion inside price: price * (rate / (100 + rate))
+          taxInclusive += Math.round(lineSubtotal * (taxPct / (100 + taxPct)));
+        } else {
+          taxExclusive += Math.round(lineSubtotal * (taxPct / 100));
+        }
+      }
+
+      const fee = meta?.fee_categories;
+      if (fee) {
+        if (fee.scope === "per_unit") {
+          const feeAmt = (fee.amount_cents ?? 0) * item.quantity + Math.round(item.unit_price_cents * item.quantity * (Number(fee.percent) || 0) / 100);
+          feeTotal += feeAmt;
+          if (fee.taxable) {
+            const feeTaxPct = (fee.tax_rate_id ? undefined : taxPct) ?? taxPct;
+            // use fee's own tax rate if configured (needs a fetch); for simplicity fall back to product tax
+            const applyPct = feeTaxPct;
+            if (applyPct > 0) {
+              if (meta?.price_includes_tax) feeTaxInclusive += Math.round(feeAmt * (applyPct / (100 + applyPct)));
+              else feeTaxExclusive += Math.round(feeAmt * (applyPct / 100));
+            }
+          }
+        } else if (!perOrderFees.has(fee.id)) {
+          perOrderFees.set(fee.id, fee);
+        }
+      }
+    }
+
+    for (const fee of perOrderFees.values()) {
+      if (!fee) continue;
+      const flat = fee.amount_cents ?? 0;
+      const pctPart = Math.round(subtotal * (Number(fee.percent) || 0) / 100);
+      const feeAmt = flat + pctPart;
+      feeTotal += feeAmt;
+      // per-order fees don't know product tax; skip taxing them unless taxable + fee has own rate → out of scope for MVP
+    }
+
+    const shippingCents = subtotal >= 50000 ? 0 : 5000; // free over ₹500, else ₹50
+    const totalTaxOnTop = taxExclusive + feeTaxExclusive;
+    const totalInclusiveTax = taxInclusive + feeTaxInclusive;
+    const total = subtotal + shippingCents + feeTotal + totalTaxOnTop;
+    return {
+      shippingCents,
+      feeTotal,
+      taxOnTop: totalTaxOnTop,
+      inclusiveTax: totalInclusiveTax,
+      total,
+    };
+  }, [items, productMeta, subtotal]);
 
   const placeOrder = async () => {
     if (!user) { navigate({ to: "/auth", search: { next: "/checkout" } as any }); return; }
     if (items.length === 0) return;
     setSubmitting(true);
     try {
-      const shipping_cents = subtotal >= 5000 ? 0 : 500;
-      const tax_cents = Math.round(subtotal * 0.08);
-      const total_cents = subtotal + shipping_cents + tax_cents;
-
-      const { data: order, error } = await supabase
-        .from("orders")
-        .insert({
-          user_id: user.id,
-          email: form.email,
-          status: "pending",
-          subtotal_cents: subtotal,
-          shipping_cents,
-          tax_cents,
-          discount_cents: 0,
-          total_cents,
-          currency,
-          shipping_address: form,
-          billing_address: form,
-        })
-        .select()
-        .single();
+      const { data: order, error } = await supabase.from("orders").insert({
+        user_id: user.id,
+        email: form.email,
+        status: "pending",
+        subtotal_cents: subtotal,
+        shipping_cents: totals.shippingCents,
+        tax_cents: totals.taxOnTop,
+        fee_cents: totals.feeTotal,
+        discount_cents: 0,
+        total_cents: totals.total,
+        currency,
+        shipping_address: form,
+        billing_address: form,
+      }).select().single();
       if (error) throw error;
 
       const { error: itemsError } = await supabase.from("order_items").insert(
@@ -103,10 +198,6 @@ function CheckoutPage() {
     );
   }
 
-  const shipping_cents = subtotal >= 5000 ? 0 : 500;
-  const tax_cents = Math.round(subtotal * 0.08);
-  const total_cents = subtotal + shipping_cents + tax_cents;
-
   return (
     <div className="min-h-screen flex flex-col">
       <SiteHeader />
@@ -142,9 +233,17 @@ function CheckoutPage() {
             ))}
             <div className="border-t pt-3 space-y-1 text-sm">
               <div className="flex justify-between"><span>Subtotal</span><span>{formatMoney(subtotal, currency)}</span></div>
-              <div className="flex justify-between"><span>Shipping</span><span>{formatMoney(shipping_cents, currency)}</span></div>
-              <div className="flex justify-between"><span>Tax</span><span>{formatMoney(tax_cents, currency)}</span></div>
-              <div className="flex justify-between font-bold text-base pt-2 border-t"><span>Total</span><span>{formatMoney(total_cents, currency)}</span></div>
+              <div className="flex justify-between"><span>Shipping</span><span>{formatMoney(totals.shippingCents, currency)}</span></div>
+              {totals.feeTotal > 0 ? (
+                <div className="flex justify-between"><span>Fees</span><span>{formatMoney(totals.feeTotal, currency)}</span></div>
+              ) : null}
+              {totals.taxOnTop > 0 ? (
+                <div className="flex justify-between"><span>Tax</span><span>{formatMoney(totals.taxOnTop, currency)}</span></div>
+              ) : null}
+              {totals.inclusiveTax > 0 ? (
+                <div className="flex justify-between text-muted-foreground"><span>Tax (included)</span><span>{formatMoney(totals.inclusiveTax, currency)}</span></div>
+              ) : null}
+              <div className="flex justify-between font-bold text-base pt-2 border-t"><span>Total</span><span>{formatMoney(totals.total, currency)}</span></div>
             </div>
             <Button className="w-full" size="lg" onClick={placeOrder} disabled={submitting || !user}>
               {submitting ? "Placing…" : "Place order"}
