@@ -64,6 +64,14 @@ export function ProductEditor({ initial, onSaved }: { initial: Product | null; o
     queryKey: ["categories", "admin"],
     queryFn: async () => (await supabase.from("categories").select("id, name").order("name")).data ?? [],
   });
+  const { data: taxRates } = useQuery({
+    queryKey: ["tax-rates", "admin"],
+    queryFn: async () => (await supabase.from("tax_rates").select("id, name, rate_percent").order("name")).data ?? [],
+  });
+  const { data: feeCategories } = useQuery({
+    queryKey: ["fee-categories", "admin"],
+    queryFn: async () => (await supabase.from("fee_categories").select("id, name").order("name")).data ?? [],
+  });
 
   const upd = (k: string) => (e: any) => setP((prev: any) => ({ ...prev, [k]: e.target?.value ?? e }));
   const updSeo = (k: string) => (e: any) =>
