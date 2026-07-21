@@ -13,28 +13,49 @@ import { Trash2, Upload, Plus } from "lucide-react";
 
 type Product = any;
 
+// Only columns that exist on `products` — never send joined relations back on update.
+const PRODUCT_COLUMNS = [
+  "slug", "title", "description", "short_description",
+  "price_cents", "compare_at_cents", "currency", "category_id",
+  "status", "images", "tags", "stock", "sku", "weight_grams",
+  "seo", "is_featured",
+];
+
+// UI works in rupees (float). DB stores paise (integer).
+const toMinor = (rupees: any): number => {
+  if (rupees === "" || rupees === null || rupees === undefined) return 0;
+  const n = Number(rupees);
+  if (!isFinite(n)) return 0;
+  return Math.round(n * 100);
+};
+const toMajor = (minor: any): string => {
+  if (minor === null || minor === undefined || minor === "") return "";
+  return (Number(minor) / 100).toString();
+};
+
 export function ProductEditor({ initial, onSaved }: { initial: Product | null; onSaved?: (id: string) => void }) {
   const qc = useQueryClient();
-  const [p, setP] = useState<any>(
-    initial ?? {
-      slug: "",
-      title: "",
-      description: "",
-      short_description: "",
-      price_cents: 0,
-      compare_at_cents: null,
-      currency: "USD",
-      category_id: null,
-      status: "draft",
-      images: [],
-      stock: 0,
-      sku: "",
-      is_featured: false,
-      tags: [],
-      seo: {},
-    },
+  const [p, setP] = useState<any>(() => {
+    const base = initial ?? {
+      slug: "", title: "", description: "", short_description: "",
+      price_cents: 0, compare_at_cents: null, currency: "INR",
+      category_id: null, status: "draft", images: [], stock: 0,
+      sku: "", is_featured: false, tags: [], seo: {},
+    };
+    return {
+      ...base,
+      _price: toMajor(base.price_cents),
+      _compare: toMajor(base.compare_at_cents),
+      _tags: (base.tags ?? []).join(", "),
+      seo: base.seo ?? {},
+    };
+  });
+  const [variants, setVariants] = useState<any[]>(
+    (initial?.product_variants ?? []).map((v: any) => ({
+      ...v,
+      _price: toMajor(v.price_cents),
+    })),
   );
-  const [variants, setVariants] = useState<any[]>(initial?.product_variants ?? []);
   const [uploading, setUploading] = useState(false);
 
   const { data: categories } = useQuery({
@@ -43,14 +64,27 @@ export function ProductEditor({ initial, onSaved }: { initial: Product | null; o
   });
 
   const upd = (k: string) => (e: any) => setP((prev: any) => ({ ...prev, [k]: e.target?.value ?? e }));
+  const updSeo = (k: string) => (e: any) =>
+    setP((prev: any) => ({ ...prev, seo: { ...(prev.seo ?? {}), [k]: e.target?.value ?? e } }));
 
   const save = useMutation({
     mutationFn: async () => {
-      const payload: any = { ...p };
-      if (!payload.slug) payload.slug = slugify(payload.title);
-      payload.price_cents = Number(payload.price_cents) || 0;
-      payload.compare_at_cents = payload.compare_at_cents ? Number(payload.compare_at_cents) : null;
-      payload.stock = Number(payload.stock) || 0;
+      // Build payload from allowed columns only.
+      const raw: any = {
+        ...p,
+        price_cents: toMinor(p._price),
+        compare_at_cents: p._compare === "" || p._compare == null ? null : toMinor(p._compare),
+        stock: Number(p.stock) || 0,
+        tags: (p._tags ?? "")
+          .split(",")
+          .map((t: string) => t.trim())
+          .filter(Boolean),
+        slug: p.slug || slugify(p.title),
+        currency: p.currency || "INR",
+      };
+      const payload: any = {};
+      for (const k of PRODUCT_COLUMNS) if (k in raw) payload[k] = raw[k];
+
       let productId = initial?.id;
       if (initial) {
         const { error } = await supabase.from("products").update(payload).eq("id", initial.id);
@@ -66,11 +100,12 @@ export function ProductEditor({ initial, onSaved }: { initial: Product | null; o
       const toDelete = existingIds.filter((id: string) => !keptIds.includes(id));
       if (toDelete.length) await supabase.from("product_variants").delete().in("id", toDelete);
       for (const v of variants) {
+        const price = v._price === "" || v._price == null ? null : toMinor(v._price);
         const vp: any = {
           product_id: productId,
           name: v.name,
           sku: v.sku ?? null,
-          price_cents: v.price_cents ? Number(v.price_cents) : null,
+          price_cents: price,
           stock: Number(v.stock) || 0,
           option_values: v.option_values ?? {},
         };
@@ -112,8 +147,16 @@ export function ProductEditor({ initial, onSaved }: { initial: Product | null; o
         <div><Label>Slug</Label><Input value={p.slug} onChange={upd("slug")} placeholder="auto from title" /></div>
         <div className="md:col-span-2"><Label>Short description</Label><Input value={p.short_description ?? ""} onChange={upd("short_description")} /></div>
         <div className="md:col-span-2"><Label>Description</Label><Textarea rows={6} value={p.description ?? ""} onChange={upd("description")} /></div>
-        <div><Label>Price (cents)</Label><Input type="number" value={p.price_cents} onChange={upd("price_cents")} /></div>
-        <div><Label>Compare-at price (cents)</Label><Input type="number" value={p.compare_at_cents ?? ""} onChange={(e) => setP((prev: any) => ({ ...prev, compare_at_cents: e.target.value }))} /></div>
+        <div>
+          <Label>Price (₹)</Label>
+          <Input type="number" step="0.01" min="0" value={p._price}
+            onChange={(e) => setP((prev: any) => ({ ...prev, _price: e.target.value }))} />
+        </div>
+        <div>
+          <Label>Compare-at price (₹)</Label>
+          <Input type="number" step="0.01" min="0" value={p._compare}
+            onChange={(e) => setP((prev: any) => ({ ...prev, _compare: e.target.value }))} />
+        </div>
         <div><Label>Currency</Label><Input value={p.currency} onChange={upd("currency")} /></div>
         <div><Label>SKU</Label><Input value={p.sku ?? ""} onChange={upd("sku")} /></div>
         <div><Label>Stock</Label><Input type="number" value={p.stock} onChange={upd("stock")} /></div>
@@ -164,10 +207,29 @@ export function ProductEditor({ initial, onSaved }: { initial: Product | null; o
         {uploading ? <p className="text-xs text-muted-foreground mt-1">Uploading…</p> : null}
       </div>
 
+      <div className="space-y-3 border-t pt-6">
+        <h3 className="font-semibold">SEO</h3>
+        <div>
+          <Label>SEO Meta Title</Label>
+          <Input value={p.seo?.title ?? ""} onChange={updSeo("title")} placeholder="Recommended: under 60 characters" maxLength={70} />
+          <p className="text-xs text-muted-foreground mt-1">{(p.seo?.title ?? "").length}/60</p>
+        </div>
+        <div>
+          <Label>SEO Meta Description</Label>
+          <Textarea rows={3} value={p.seo?.description ?? ""} onChange={updSeo("description")} placeholder="Recommended: under 160 characters" maxLength={200} />
+          <p className="text-xs text-muted-foreground mt-1">{(p.seo?.description ?? "").length}/160</p>
+        </div>
+        <div>
+          <Label>Product Tags</Label>
+          <Input value={p._tags} onChange={(e) => setP((prev: any) => ({ ...prev, _tags: e.target.value }))} placeholder="Comma-separated, e.g. natural, ayurvedic, camphor" />
+          <p className="text-xs text-muted-foreground mt-1">Separate tags with commas</p>
+        </div>
+      </div>
+
       <div>
         <div className="flex items-center justify-between mb-2">
           <Label>Variants (optional)</Label>
-          <Button variant="outline" size="sm" onClick={() => setVariants((v) => [...v, { name: "", stock: 0 }])}>
+          <Button variant="outline" size="sm" onClick={() => setVariants((v) => [...v, { name: "", stock: 0, _price: "" }])}>
             <Plus className="h-3 w-3 mr-1" />Add variant
           </Button>
         </div>
@@ -176,7 +238,7 @@ export function ProductEditor({ initial, onSaved }: { initial: Product | null; o
             <div key={i} className="grid grid-cols-12 gap-2 items-center">
               <Input className="col-span-4" placeholder="Name (e.g. Small / Red)" value={v.name} onChange={(e) => setVariants((prev) => prev.map((x, idx) => idx === i ? { ...x, name: e.target.value } : x))} />
               <Input className="col-span-2" placeholder="SKU" value={v.sku ?? ""} onChange={(e) => setVariants((prev) => prev.map((x, idx) => idx === i ? { ...x, sku: e.target.value } : x))} />
-              <Input className="col-span-3" type="number" placeholder="Price override (cents)" value={v.price_cents ?? ""} onChange={(e) => setVariants((prev) => prev.map((x, idx) => idx === i ? { ...x, price_cents: e.target.value } : x))} />
+              <Input className="col-span-3" type="number" step="0.01" placeholder="Price override (₹)" value={v._price ?? ""} onChange={(e) => setVariants((prev) => prev.map((x, idx) => idx === i ? { ...x, _price: e.target.value } : x))} />
               <Input className="col-span-2" type="number" placeholder="Stock" value={v.stock ?? 0} onChange={(e) => setVariants((prev) => prev.map((x, idx) => idx === i ? { ...x, stock: e.target.value } : x))} />
               <Button variant="ghost" size="icon" className="col-span-1" onClick={() => setVariants((prev) => prev.filter((_, idx) => idx !== i))}><Trash2 className="h-4 w-4" /></Button>
             </div>
