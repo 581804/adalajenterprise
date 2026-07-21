@@ -19,6 +19,7 @@ const PRODUCT_COLUMNS = [
   "price_cents", "compare_at_cents", "currency", "category_id",
   "status", "images", "tags", "stock", "sku", "weight_grams",
   "seo", "is_featured",
+  "tax_rate_id", "price_includes_tax", "fee_category_id",
 ];
 
 // UI works in rupees (float). DB stores paise (integer).
