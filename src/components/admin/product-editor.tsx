@@ -42,6 +42,7 @@ export function ProductEditor({ initial, onSaved }: { initial: Product | null; o
       price_cents: 0, compare_at_cents: null, currency: "INR",
       category_id: null, status: "draft", images: [], stock: 0,
       sku: "", is_featured: false, tags: [], seo: {},
+      tax_rate_id: null, price_includes_tax: false, fee_category_id: null,
     };
     return {
       ...base,
