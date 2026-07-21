@@ -197,6 +197,39 @@ export function ProductEditor({ initial, onSaved }: { initial: Product | null; o
         </div>
       </div>
 
+      <div className="border-t pt-6 space-y-3">
+        <h3 className="font-semibold">Tax & fees</h3>
+        <div className="grid md:grid-cols-2 gap-4">
+          <div>
+            <Label>Tax rate</Label>
+            <Select value={p.tax_rate_id ?? "none"} onValueChange={(v) => setP((prev: any) => ({ ...prev, tax_rate_id: v === "none" ? null : v }))}>
+              <SelectTrigger><SelectValue placeholder="No tax" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No tax</SelectItem>
+                {taxRates?.map((t: any) => <SelectItem key={t.id} value={t.id}>{t.name} ({t.rate_percent}%)</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1">Leave as "No tax" to hide the tax line at checkout.</p>
+          </div>
+          <div>
+            <Label>Fee category</Label>
+            <Select value={p.fee_category_id ?? "none"} onValueChange={(v) => setP((prev: any) => ({ ...prev, fee_category_id: v === "none" ? null : v }))}>
+              <SelectTrigger><SelectValue placeholder="No fee" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No fee</SelectItem>
+                {feeCategories?.map((f: any) => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1">Manage in Admin → Fees.</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Switch checked={!!p.price_includes_tax} onCheckedChange={(v) => setP((prev: any) => ({ ...prev, price_includes_tax: v }))} />
+          <Label>Price includes tax (inclusive)</Label>
+        </div>
+      </div>
+
+
       <div>
         <Label>Images</Label>
         <div className="grid grid-cols-4 gap-2 mt-2">
