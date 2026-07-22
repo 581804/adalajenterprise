@@ -150,7 +150,11 @@ function CheckoutPage() {
       // per-order fees don't know product tax; skip taxing them unless taxable + fee has own rate → out of scope for MVP
     }
 
-    const shippingCents = subtotal >= 50000 ? 0 : 5000; // free over ₹500, else ₹50
+    const selected = shippingOptions?.find((r: any) => r.id === selectedShippingId);
+    let shippingCents = 0;
+    if (selected) {
+      shippingCents = selected.free_over_cents && subtotal >= selected.free_over_cents ? 0 : (selected.price_cents ?? 0);
+    }
     const totalTaxOnTop = taxExclusive + feeTaxExclusive;
     const totalInclusiveTax = taxInclusive + feeTaxInclusive;
     const total = subtotal + shippingCents + feeTotal + totalTaxOnTop;
