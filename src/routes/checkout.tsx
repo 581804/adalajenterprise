@@ -252,6 +252,30 @@ function CheckoutPage() {
               <div><Label>Country</Label><Input value={form.country} onChange={upd("country")} required /></div>
               <div><Label>Phone</Label><Input value={form.phone} onChange={upd("phone")} /></div>
             </div>
+
+            {form.country ? (
+              <div className="pt-4">
+                <h2 className="font-semibold text-lg mb-2">Shipping method</h2>
+                {shippingOptions && shippingOptions.length > 0 ? (
+                  <div className="space-y-2">
+                    {shippingOptions.map((r: any) => {
+                      const free = r.free_over_cents && subtotal >= r.free_over_cents;
+                      return (
+                        <label key={r.id} className={`flex items-center justify-between border rounded p-3 cursor-pointer ${selectedShippingId === r.id ? "border-primary bg-muted/30" : ""}`}>
+                          <span className="flex items-center gap-2">
+                            <input type="radio" name="ship" checked={selectedShippingId === r.id} onChange={() => setSelectedShippingId(r.id)} />
+                            <span>{r.name}</span>
+                          </span>
+                          <span className="text-sm font-medium">{free ? "Free" : formatMoney(r.price_cents, currency)}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No shipping options configured for {form.country.toUpperCase()}. Order will ship with no shipping fee — contact us for arrangements.</p>
+                )}
+              </div>
+            ) : null}
           </div>
           <aside className="p-6 border rounded-lg h-fit space-y-3">
             <h2 className="font-semibold">Order summary</h2>
