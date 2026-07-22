@@ -343,9 +343,12 @@ export type Database = {
       }
       orders: {
         Row: {
+          admin_note: string | null
           billing_address: Json
+          carrier: string | null
           created_at: string
           currency: string
+          delivered_at: string | null
           discount_cents: number
           discount_code: string | null
           email: string
@@ -353,6 +356,7 @@ export type Database = {
           id: string
           notes: string | null
           order_number: string
+          shipped_at: string | null
           shipping_address: Json
           shipping_cents: number
           shipping_method: string | null
@@ -361,13 +365,17 @@ export type Database = {
           tax_cents: number
           total_cents: number
           tracking_number: string | null
+          tracking_url: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          admin_note?: string | null
           billing_address?: Json
+          carrier?: string | null
           created_at?: string
           currency?: string
+          delivered_at?: string | null
           discount_cents?: number
           discount_code?: string | null
           email: string
@@ -375,6 +383,7 @@ export type Database = {
           id?: string
           notes?: string | null
           order_number?: string
+          shipped_at?: string | null
           shipping_address?: Json
           shipping_cents?: number
           shipping_method?: string | null
@@ -383,13 +392,17 @@ export type Database = {
           tax_cents?: number
           total_cents?: number
           tracking_number?: string | null
+          tracking_url?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          admin_note?: string | null
           billing_address?: Json
+          carrier?: string | null
           created_at?: string
           currency?: string
+          delivered_at?: string | null
           discount_cents?: number
           discount_code?: string | null
           email?: string
@@ -397,6 +410,7 @@ export type Database = {
           id?: string
           notes?: string | null
           order_number?: string
+          shipped_at?: string | null
           shipping_address?: Json
           shipping_cents?: number
           shipping_method?: string | null
@@ -405,6 +419,7 @@ export type Database = {
           tax_cents?: number
           total_cents?: number
           tracking_number?: string | null
+          tracking_url?: string | null
           updated_at?: string
           user_id?: string
         }
