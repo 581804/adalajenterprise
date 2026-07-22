@@ -70,6 +70,29 @@ function CheckoutPage() {
   }, [user]);
   const upd = (k: keyof typeof form) => (e: any) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
+  const { data: shippingOptions } = useQuery({
+    queryKey: ["checkout-shipping", form.country?.toUpperCase()],
+    queryFn: async () => {
+      const country = form.country?.trim().toUpperCase();
+      if (!country) return [] as { id: string; name: string; price_cents: number; free_over_cents: number | null }[];
+      const { data, error } = await supabase
+        .from("shipping_zones")
+        .select("id, countries, is_active, shipping_rates(id, name, price_cents, free_over_cents, is_active)")
+        .eq("is_active", true);
+      if (error) throw error;
+      const matched = (data ?? []).filter((z: any) => (z.countries ?? []).map((c: string) => c.toUpperCase()).includes(country));
+      return matched.flatMap((z: any) => (z.shipping_rates ?? []).filter((r: any) => r.is_active)) as any[];
+    },
+  });
+
+  const [selectedShippingId, setSelectedShippingId] = useState<string>("");
+  useEffect(() => {
+    if (shippingOptions && shippingOptions.length && !shippingOptions.find((r) => r.id === selectedShippingId)) {
+      setSelectedShippingId(shippingOptions[0].id);
+    }
+    if (shippingOptions && shippingOptions.length === 0) setSelectedShippingId("");
+  }, [shippingOptions]);
+
   // Compute totals from authoritative product data.
   const totals = useMemo(() => {
     const metaById = new Map<string, ProductMeta>();
@@ -127,7 +150,11 @@ function CheckoutPage() {
       // per-order fees don't know product tax; skip taxing them unless taxable + fee has own rate → out of scope for MVP
     }
 
-    const shippingCents = subtotal >= 50000 ? 0 : 5000; // free over ₹500, else ₹50
+    const selected = shippingOptions?.find((r: any) => r.id === selectedShippingId);
+    let shippingCents = 0;
+    if (selected) {
+      shippingCents = selected.free_over_cents && subtotal >= selected.free_over_cents ? 0 : (selected.price_cents ?? 0);
+    }
     const totalTaxOnTop = taxExclusive + feeTaxExclusive;
     const totalInclusiveTax = taxInclusive + feeTaxInclusive;
     const total = subtotal + shippingCents + feeTotal + totalTaxOnTop;
@@ -138,7 +165,9 @@ function CheckoutPage() {
       inclusiveTax: totalInclusiveTax,
       total,
     };
-  }, [items, productMeta, subtotal]);
+  }, [items, productMeta, subtotal, shippingOptions, selectedShippingId]);
+
+  const selectedShipping = shippingOptions?.find((r: any) => r.id === selectedShippingId);
 
   const placeOrder = async () => {
     if (!user) { navigate({ to: "/auth", search: { next: "/checkout" } as any }); return; }
@@ -158,6 +187,7 @@ function CheckoutPage() {
         currency,
         shipping_address: form,
         billing_address: form,
+        shipping_method: selectedShipping?.name ?? null,
       }).select().single();
       if (error) throw error;
 
@@ -222,6 +252,30 @@ function CheckoutPage() {
               <div><Label>Country</Label><Input value={form.country} onChange={upd("country")} required /></div>
               <div><Label>Phone</Label><Input value={form.phone} onChange={upd("phone")} /></div>
             </div>
+
+            {form.country ? (
+              <div className="pt-4">
+                <h2 className="font-semibold text-lg mb-2">Shipping method</h2>
+                {shippingOptions && shippingOptions.length > 0 ? (
+                  <div className="space-y-2">
+                    {shippingOptions.map((r: any) => {
+                      const free = r.free_over_cents && subtotal >= r.free_over_cents;
+                      return (
+                        <label key={r.id} className={`flex items-center justify-between border rounded p-3 cursor-pointer ${selectedShippingId === r.id ? "border-primary bg-muted/30" : ""}`}>
+                          <span className="flex items-center gap-2">
+                            <input type="radio" name="ship" checked={selectedShippingId === r.id} onChange={() => setSelectedShippingId(r.id)} />
+                            <span>{r.name}</span>
+                          </span>
+                          <span className="text-sm font-medium">{free ? "Free" : formatMoney(r.price_cents, currency)}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No shipping options configured for {form.country.toUpperCase()}. Order will ship with no shipping fee — contact us for arrangements.</p>
+                )}
+              </div>
+            ) : null}
           </div>
           <aside className="p-6 border rounded-lg h-fit space-y-3">
             <h2 className="font-semibold">Order summary</h2>
@@ -233,7 +287,11 @@ function CheckoutPage() {
             ))}
             <div className="border-t pt-3 space-y-1 text-sm">
               <div className="flex justify-between"><span>Subtotal</span><span>{formatMoney(subtotal, currency)}</span></div>
-              <div className="flex justify-between"><span>Shipping</span><span>{formatMoney(totals.shippingCents, currency)}</span></div>
+              {totals.shippingCents > 0 ? (
+                <div className="flex justify-between"><span>Shipping{selectedShipping ? ` (${selectedShipping.name})` : ""}</span><span>{formatMoney(totals.shippingCents, currency)}</span></div>
+              ) : selectedShipping ? (
+                <div className="flex justify-between"><span>Shipping ({selectedShipping.name})</span><span>Free</span></div>
+              ) : null}
               {totals.feeTotal > 0 ? (
                 <div className="flex justify-between"><span>Fees</span><span>{formatMoney(totals.feeTotal, currency)}</span></div>
               ) : null}
