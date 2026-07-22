@@ -165,7 +165,9 @@ function CheckoutPage() {
       inclusiveTax: totalInclusiveTax,
       total,
     };
-  }, [items, productMeta, subtotal]);
+  }, [items, productMeta, subtotal, shippingOptions, selectedShippingId]);
+
+  const selectedShipping = shippingOptions?.find((r: any) => r.id === selectedShippingId);
 
   const placeOrder = async () => {
     if (!user) { navigate({ to: "/auth", search: { next: "/checkout" } as any }); return; }
