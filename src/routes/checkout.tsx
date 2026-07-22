@@ -61,6 +61,29 @@ function CheckoutPage() {
     },
   });
 
+  const { data: shippingOptions } = useQuery({
+    queryKey: ["checkout-shipping", form.country?.toUpperCase()],
+    queryFn: async () => {
+      const country = form.country?.trim().toUpperCase();
+      if (!country) return [] as { id: string; name: string; price_cents: number; free_over_cents: number | null }[];
+      const { data, error } = await supabase
+        .from("shipping_zones")
+        .select("id, countries, is_active, shipping_rates(id, name, price_cents, free_over_cents, is_active)")
+        .eq("is_active", true);
+      if (error) throw error;
+      const matched = (data ?? []).filter((z: any) => (z.countries ?? []).map((c: string) => c.toUpperCase()).includes(country));
+      return matched.flatMap((z: any) => (z.shipping_rates ?? []).filter((r: any) => r.is_active)) as any[];
+    },
+  });
+
+  const [selectedShippingId, setSelectedShippingId] = useState<string>("");
+  useEffect(() => {
+    if (shippingOptions && shippingOptions.length && !shippingOptions.find((r) => r.id === selectedShippingId)) {
+      setSelectedShippingId(shippingOptions[0].id);
+    }
+    if (shippingOptions && shippingOptions.length === 0) setSelectedShippingId("");
+  }, [shippingOptions]);
+
   const [form, setForm] = useState({
     full_name: "", email: user?.email ?? "",
     line1: "", line2: "", city: "", region: "", postal_code: "", country: "", phone: "",
