@@ -61,6 +61,15 @@ function CheckoutPage() {
     },
   });
 
+  const [form, setForm] = useState({
+    full_name: "", email: user?.email ?? "",
+    line1: "", line2: "", city: "", region: "", postal_code: "", country: "", phone: "",
+  });
+  useEffect(() => {
+    if (user?.email && !form.email) setForm((f) => ({ ...f, email: user.email! }));
+  }, [user]);
+  const upd = (k: keyof typeof form) => (e: any) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
   const { data: shippingOptions } = useQuery({
     queryKey: ["checkout-shipping", form.country?.toUpperCase()],
     queryFn: async () => {
@@ -83,15 +92,6 @@ function CheckoutPage() {
     }
     if (shippingOptions && shippingOptions.length === 0) setSelectedShippingId("");
   }, [shippingOptions]);
-
-  const [form, setForm] = useState({
-    full_name: "", email: user?.email ?? "",
-    line1: "", line2: "", city: "", region: "", postal_code: "", country: "", phone: "",
-  });
-  useEffect(() => {
-    if (user?.email && !form.email) setForm((f) => ({ ...f, email: user.email! }));
-  }, [user]);
-  const upd = (k: keyof typeof form) => (e: any) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   // Compute totals from authoritative product data.
   const totals = useMemo(() => {
