@@ -187,6 +187,7 @@ function CheckoutPage() {
         currency,
         shipping_address: form,
         billing_address: form,
+        shipping_method: selectedShipping?.name ?? null,
       }).select().single();
       if (error) throw error;
 
