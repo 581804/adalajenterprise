@@ -287,7 +287,11 @@ function CheckoutPage() {
             ))}
             <div className="border-t pt-3 space-y-1 text-sm">
               <div className="flex justify-between"><span>Subtotal</span><span>{formatMoney(subtotal, currency)}</span></div>
-              <div className="flex justify-between"><span>Shipping</span><span>{formatMoney(totals.shippingCents, currency)}</span></div>
+              {totals.shippingCents > 0 ? (
+                <div className="flex justify-between"><span>Shipping{selectedShipping ? ` (${selectedShipping.name})` : ""}</span><span>{formatMoney(totals.shippingCents, currency)}</span></div>
+              ) : selectedShipping ? (
+                <div className="flex justify-between"><span>Shipping ({selectedShipping.name})</span><span>Free</span></div>
+              ) : null}
               {totals.feeTotal > 0 ? (
                 <div className="flex justify-between"><span>Fees</span><span>{formatMoney(totals.feeTotal, currency)}</span></div>
               ) : null}
