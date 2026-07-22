@@ -39,13 +39,18 @@ function Account() {
           <h2 className="text-xl font-semibold mb-3">Order history</h2>
           <div className="border rounded-lg divide-y">
             {orders?.length ? orders.map((o) => (
-              <div key={o.id} className="p-4 flex justify-between">
+              <Link
+                key={o.id}
+                to="/account/orders/$id"
+                params={{ id: o.id }}
+                className="p-4 flex justify-between hover:bg-muted/40 transition"
+              >
                 <div>
                   <div className="font-medium">{o.order_number}</div>
-                  <div className="text-sm text-muted-foreground">{new Date(o.created_at).toLocaleDateString()} · {o.status}</div>
+                  <div className="text-sm text-muted-foreground">{new Date(o.created_at).toLocaleDateString()} · <span className="capitalize">{o.status}</span></div>
                 </div>
                 <div className="font-medium">{formatMoney(o.total_cents, o.currency)}</div>
-              </div>
+              </Link>
             )) : <p className="p-8 text-center text-muted-foreground">No orders yet.</p>}
           </div>
         </section>
