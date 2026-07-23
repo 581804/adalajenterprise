@@ -225,7 +225,7 @@ function OrderDetail() {
             {order.tax_cents > 0 ? <div className="flex justify-between"><span>Tax</span><span>{formatMoney(order.tax_cents, order.currency)}</span></div> : null}
             {order.discount_cents > 0 ? <div className="flex justify-between"><span>Discount</span><span>−{formatMoney(order.discount_cents, order.currency)}</span></div> : null}
             <div className="flex justify-between font-bold pt-2 border-t"><span>Total</span><span>{formatMoney(order.total_cents, order.currency)}</span></div>
-            {order.payment_status ? <div className="pt-2 text-xs text-muted-foreground">Payment: <span className="capitalize">{order.payment_status}</span></div> : null}
+            {(order as any).payment_status ? <div className="pt-2 text-xs text-muted-foreground">Payment: <span className="capitalize">{(order as any).payment_status}</span></div> : null}
           </section>
           <section className="border rounded-lg p-6 text-sm">
             <h2 className="font-semibold mb-2">Shipping address</h2>
