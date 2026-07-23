@@ -93,7 +93,7 @@ function Account() {
           <div className="flex flex-wrap items-end justify-between gap-3">
             <h2 className="text-xl font-semibold">Order history</h2>
             <div className="text-sm text-muted-foreground">
-              {filtered.length} of {orders?.length ?? ?? 0} orders
+              {filtered.length} of {orders?.length ?? 0} orders
             </div>
           </div>
 
