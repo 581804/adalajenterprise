@@ -262,8 +262,8 @@ function CheckoutPage() {
           <div className="lg:col-span-2 space-y-4">
             <h2 className="font-semibold text-lg">Shipping information</h2>
             <div className="grid md:grid-cols-2 gap-4">
-              <div><Label>Full name</Label><Input value={form.full_name} onChange={upd("full_name")} required /></div>
-              <div><Label>Email</Label><Input type="email" value={form.email} onChange={upd("email")} required /></div>
+              <div><Label>Full name *</Label><Input value={form.full_name} onChange={upd("full_name")} required /></div>
+              <div><Label>Email *</Label><Input type="email" value={form.email} onChange={upd("email")} required /></div>
               <div className="md:col-span-2"><Label>Address *</Label><Input value={form.line1} onChange={upd("line1")} required /></div>
               <div className="md:col-span-2"><Label>Apartment / suite *</Label><Input value={form.line2} onChange={upd("line2")} required /></div>
               <div><Label>City *</Label><Input value={form.city} onChange={upd("city")} required /></div>
