@@ -192,17 +192,28 @@ function CheckoutPage() {
     if (selected) {
       shippingCents = selected.free_over_cents && subtotal >= selected.free_over_cents ? 0 : (selected.price_cents ?? 0);
     }
+    // Apply discount
+    let discountCents = 0;
+    if (discount) {
+      if (discount.type === "free_shipping") {
+        discountCents = shippingCents;
+        shippingCents = 0;
+      } else {
+        discountCents = Math.min(discount.discount_cents, subtotal);
+      }
+    }
     const totalTaxOnTop = taxExclusive + feeTaxExclusive;
     const totalInclusiveTax = taxInclusive + feeTaxInclusive;
-    const total = subtotal + shippingCents + feeTotal + totalTaxOnTop;
+    const total = Math.max(0, subtotal - discountCents + shippingCents + feeTotal + totalTaxOnTop);
     return {
       shippingCents,
       feeTotal,
       taxOnTop: totalTaxOnTop,
       inclusiveTax: totalInclusiveTax,
+      discountCents,
       total,
     };
-  }, [items, productMeta, subtotal, shippingOptions, selectedShippingId]);
+  }, [items, productMeta, subtotal, shippingOptions, selectedShippingId, discount]);
 
   const selectedShipping = shippingOptions?.find((r: any) => r.id === selectedShippingId);
 
