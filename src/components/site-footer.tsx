@@ -3,7 +3,21 @@ import { toast } from "sonner";
 import { useSiteSettingsOptional } from "@/hooks/use-site-settings";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Mail, Phone, MapPin } from "lucide-react";
+import { Mail, Phone, MapPin, Facebook, Instagram, Twitter, Youtube, Linkedin, Github, Globe, MessageCircle, Music2, Send } from "lucide-react";
+
+const SOCIAL_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  facebook: Facebook,
+  instagram: Instagram,
+  twitter: Twitter,
+  x: Twitter,
+  youtube: Youtube,
+  linkedin: Linkedin,
+  github: Github,
+  tiktok: Music2,
+  whatsapp: MessageCircle,
+  telegram: Send,
+  website: Globe,
+};
 
 export function SiteFooter() {
   const { data: settings } = useSiteSettingsOptional();
