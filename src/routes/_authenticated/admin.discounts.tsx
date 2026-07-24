@@ -25,7 +25,17 @@ function AdminDiscounts() {
   });
   const save = useMutation({
     mutationFn: async (d: any) => {
-      const payload = { ...d, code: d.code.toUpperCase(), value: Number(d.value) || 0, min_subtotal_cents: Number(d.min_subtotal_cents) || 0, usage_limit: d.usage_limit ? Number(d.usage_limit) : null };
+      const payload = {
+        code: d.code.toUpperCase().trim(),
+        description: d.description ?? null,
+        type: d.type,
+        value: Number(d.value) || 0,
+        min_subtotal_cents: Number(d.min_subtotal_cents) || 0,
+        usage_limit: d.unlimited ? null : (d.usage_limit ? Number(d.usage_limit) : null),
+        starts_at: d.starts_at ? new Date(d.starts_at).toISOString() : null,
+        ends_at: d.ends_at ? new Date(d.ends_at).toISOString() : null,
+        is_active: !!d.is_active,
+      };
       if (d.id) { const { error } = await supabase.from("discounts").update(payload).eq("id", d.id); if (error) throw error; }
       else { const { error } = await supabase.from("discounts").insert(payload); if (error) throw error; }
     },
