@@ -172,6 +172,25 @@ function CheckoutPage() {
   const placeOrder = async () => {
     if (!user) { navigate({ to: "/auth", search: { next: "/checkout" } as any }); return; }
     if (items.length === 0) return;
+
+    const requiredFields: Array<[keyof typeof form, string]> = [
+      ["full_name", "Full name"],
+      ["email", "Email"],
+      ["line1", "Address"],
+      ["line2", "Apartment / suite"],
+      ["city", "City"],
+      ["region", "State/Region"],
+      ["postal_code", "Postal code"],
+      ["country", "Country"],
+      ["phone", "Phone"],
+    ];
+    for (const [key, label] of requiredFields) {
+      if (!String(form[key] ?? "").trim()) {
+        toast.error(`${label} is required`);
+        return;
+      }
+    }
+
     setSubmitting(true);
     try {
       const { data: order, error } = await supabase.from("orders").insert({
@@ -215,6 +234,7 @@ function CheckoutPage() {
     }
   };
 
+
   if (loading) return null;
   if (items.length === 0) {
     return (
@@ -242,15 +262,16 @@ function CheckoutPage() {
           <div className="lg:col-span-2 space-y-4">
             <h2 className="font-semibold text-lg">Shipping information</h2>
             <div className="grid md:grid-cols-2 gap-4">
-              <div><Label>Full name</Label><Input value={form.full_name} onChange={upd("full_name")} required /></div>
-              <div><Label>Email</Label><Input type="email" value={form.email} onChange={upd("email")} required /></div>
-              <div className="md:col-span-2"><Label>Address</Label><Input value={form.line1} onChange={upd("line1")} required /></div>
-              <div className="md:col-span-2"><Label>Apartment / suite</Label><Input value={form.line2} onChange={upd("line2")} /></div>
-              <div><Label>City</Label><Input value={form.city} onChange={upd("city")} required /></div>
-              <div><Label>State/Region</Label><Input value={form.region} onChange={upd("region")} /></div>
-              <div><Label>Postal code</Label><Input value={form.postal_code} onChange={upd("postal_code")} required /></div>
-              <div><Label>Country</Label><Input value={form.country} onChange={upd("country")} required /></div>
-              <div><Label>Phone</Label><Input value={form.phone} onChange={upd("phone")} /></div>
+              <div><Label>Full name *</Label><Input value={form.full_name} onChange={upd("full_name")} required /></div>
+              <div><Label>Email *</Label><Input type="email" value={form.email} onChange={upd("email")} required /></div>
+              <div className="md:col-span-2"><Label>Address *</Label><Input value={form.line1} onChange={upd("line1")} required /></div>
+              <div className="md:col-span-2"><Label>Apartment / suite *</Label><Input value={form.line2} onChange={upd("line2")} required /></div>
+              <div><Label>City *</Label><Input value={form.city} onChange={upd("city")} required /></div>
+              <div><Label>State/Region *</Label><Input value={form.region} onChange={upd("region")} required /></div>
+              <div><Label>Postal code *</Label><Input value={form.postal_code} onChange={upd("postal_code")} required /></div>
+              <div><Label>Country *</Label><Input value={form.country} onChange={upd("country")} required /></div>
+              <div><Label>Phone *</Label><Input value={form.phone} onChange={upd("phone")} required /></div>
+
             </div>
 
             {form.country ? (

@@ -1,6 +1,18 @@
 import { useSuspenseQuery, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
+export type FooterColumn = { title: string; links: Array<{ label: string; url: string }> };
+export type FooterConfig = {
+  about: string;
+  address: string;
+  columns: FooterColumn[];
+  newsletter: { enabled: boolean; heading: string; subheading: string; placeholder: string };
+  bottom_links: Array<{ label: string; url: string }>;
+  payment_badges: string[];
+  show_social: boolean;
+  copyright: string;
+};
+
 export type SiteSettings = {
   id: number;
   brand_name: string;
@@ -19,6 +31,7 @@ export type SiteSettings = {
   banners: Array<{ image?: string; headline?: string; subhead?: string; cta_label?: string; cta_url?: string }>;
   announcement: { enabled: boolean; text: string; link?: string };
   seo: { title?: string; description?: string; og_image?: string };
+  footer: FooterConfig;
 };
 
 async function fetchSiteSettings(): Promise<SiteSettings> {

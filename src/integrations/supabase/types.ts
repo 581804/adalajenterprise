@@ -711,6 +711,7 @@ export type Database = {
           currency: string
           currency_symbol: string
           favicon_url: string | null
+          footer: Json
           footer_nav: Json
           header_nav: Json
           id: number
@@ -731,6 +732,7 @@ export type Database = {
           currency?: string
           currency_symbol?: string
           favicon_url?: string | null
+          footer?: Json
           footer_nav?: Json
           header_nav?: Json
           id?: number
@@ -751,6 +753,7 @@ export type Database = {
           currency?: string
           currency_symbol?: string
           favicon_url?: string | null
+          footer?: Json
           footer_nav?: Json
           header_nav?: Json
           id?: number
