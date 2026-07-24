@@ -112,12 +112,97 @@ function AdminBranding() {
         <Button variant="outline" size="sm" onClick={() => upd("banners", [...(s.banners ?? []), {}])}><Plus className="h-3 w-3 mr-1" />Add banner</Button>
       </section>
 
+      <section className="space-y-4 border-t pt-6">
+        <h2 className="font-semibold text-lg">Footer</h2>
+
+        <div><Label>About text</Label><Textarea rows={3} value={s.footer?.about ?? ""} onChange={(e) => upd("footer", { ...(s.footer ?? {}), about: e.target.value })} /></div>
+        <div><Label>Address</Label><Textarea rows={2} value={s.footer?.address ?? ""} onChange={(e) => upd("footer", { ...(s.footer ?? {}), address: e.target.value })} /></div>
+
+        <div className="flex items-center gap-2">
+          <Switch checked={s.footer?.show_social !== false} onCheckedChange={(v) => upd("footer", { ...(s.footer ?? {}), show_social: v })} />
+          <Label>Show social links in footer</Label>
+        </div>
+
+        <div className="space-y-2">
+          <div className="font-semibold text-sm">Social links (URL per network)</div>
+          {(["facebook", "instagram", "twitter", "youtube", "linkedin", "whatsapp"] as const).map((k) => (
+            <div key={k} className="flex gap-2 items-center">
+              <Label className="w-28 capitalize">{k}</Label>
+              <Input
+                placeholder={`https://…`}
+                value={s.social_links?.[k] ?? ""}
+                onChange={(e) => upd("social_links", { ...(s.social_links ?? {}), [k]: e.target.value })}
+              />
+            </div>
+          ))}
+        </div>
+
+        <div className="space-y-2">
+          <div className="font-semibold text-sm">Link columns</div>
+          {(s.footer?.columns ?? []).map((col: any, ci: number) => (
+            <div key={ci} className="border rounded p-3 space-y-2">
+              <div className="flex gap-2">
+                <Input placeholder="Column title" value={col.title ?? ""} onChange={(e) => upd("footer", { ...s.footer, columns: s.footer.columns.map((c: any, i: number) => i === ci ? { ...c, title: e.target.value } : c) })} />
+                <Button variant="ghost" size="icon" onClick={() => upd("footer", { ...s.footer, columns: s.footer.columns.filter((_: any, i: number) => i !== ci) })}><Trash2 className="h-4 w-4" /></Button>
+              </div>
+              {(col.links ?? []).map((l: any, li: number) => (
+                <div key={li} className="flex gap-2">
+                  <Input placeholder="Label" value={l.label} onChange={(e) => upd("footer", { ...s.footer, columns: s.footer.columns.map((c: any, i: number) => i === ci ? { ...c, links: c.links.map((x: any, j: number) => j === li ? { ...x, label: e.target.value } : x) } : c) })} />
+                  <Input placeholder="URL" value={l.url} onChange={(e) => upd("footer", { ...s.footer, columns: s.footer.columns.map((c: any, i: number) => i === ci ? { ...c, links: c.links.map((x: any, j: number) => j === li ? { ...x, url: e.target.value } : x) } : c) })} />
+                  <Button variant="ghost" size="icon" onClick={() => upd("footer", { ...s.footer, columns: s.footer.columns.map((c: any, i: number) => i === ci ? { ...c, links: c.links.filter((_: any, j: number) => j !== li) } : c) })}><Trash2 className="h-4 w-4" /></Button>
+                </div>
+              ))}
+              <Button variant="outline" size="sm" onClick={() => upd("footer", { ...s.footer, columns: s.footer.columns.map((c: any, i: number) => i === ci ? { ...c, links: [...(c.links ?? []), { label: "", url: "" }] } : c) })}><Plus className="h-3 w-3 mr-1" />Add link</Button>
+            </div>
+          ))}
+          <Button variant="outline" size="sm" onClick={() => upd("footer", { ...(s.footer ?? {}), columns: [...(s.footer?.columns ?? []), { title: "", links: [] }] })}><Plus className="h-3 w-3 mr-1" />Add column</Button>
+        </div>
+
+        <div className="space-y-2 border-t pt-4">
+          <div className="font-semibold text-sm">Newsletter</div>
+          <div className="flex items-center gap-2">
+            <Switch checked={s.footer?.newsletter?.enabled ?? false} onCheckedChange={(v) => upd("footer", { ...(s.footer ?? {}), newsletter: { ...(s.footer?.newsletter ?? {}), enabled: v } })} />
+            <Label>Show newsletter signup</Label>
+          </div>
+          <div><Label>Heading</Label><Input value={s.footer?.newsletter?.heading ?? ""} onChange={(e) => upd("footer", { ...s.footer, newsletter: { ...(s.footer?.newsletter ?? {}), heading: e.target.value } })} /></div>
+          <div><Label>Subheading</Label><Input value={s.footer?.newsletter?.subheading ?? ""} onChange={(e) => upd("footer", { ...s.footer, newsletter: { ...(s.footer?.newsletter ?? {}), subheading: e.target.value } })} /></div>
+          <div><Label>Input placeholder</Label><Input value={s.footer?.newsletter?.placeholder ?? ""} onChange={(e) => upd("footer", { ...s.footer, newsletter: { ...(s.footer?.newsletter ?? {}), placeholder: e.target.value } })} /></div>
+        </div>
+
+        <div className="space-y-2 border-t pt-4">
+          <div className="font-semibold text-sm">Bottom bar links (Privacy, Terms, etc.)</div>
+          {(s.footer?.bottom_links ?? []).map((l: any, i: number) => (
+            <div key={i} className="flex gap-2">
+              <Input placeholder="Label" value={l.label} onChange={(e) => upd("footer", { ...s.footer, bottom_links: s.footer.bottom_links.map((x: any, idx: number) => idx === i ? { ...x, label: e.target.value } : x) })} />
+              <Input placeholder="URL" value={l.url} onChange={(e) => upd("footer", { ...s.footer, bottom_links: s.footer.bottom_links.map((x: any, idx: number) => idx === i ? { ...x, url: e.target.value } : x) })} />
+              <Button variant="ghost" size="icon" onClick={() => upd("footer", { ...s.footer, bottom_links: s.footer.bottom_links.filter((_: any, idx: number) => idx !== i) })}><Trash2 className="h-4 w-4" /></Button>
+            </div>
+          ))}
+          <Button variant="outline" size="sm" onClick={() => upd("footer", { ...(s.footer ?? {}), bottom_links: [...(s.footer?.bottom_links ?? []), { label: "", url: "" }] })}><Plus className="h-3 w-3 mr-1" />Add link</Button>
+        </div>
+
+        <div className="space-y-2 border-t pt-4">
+          <div className="font-semibold text-sm">Payment badge images (URLs)</div>
+          {(s.footer?.payment_badges ?? []).map((url: string, i: number) => (
+            <div key={i} className="flex gap-2">
+              <Input placeholder="https://…/visa.svg" value={url} onChange={(e) => upd("footer", { ...s.footer, payment_badges: s.footer.payment_badges.map((x: string, idx: number) => idx === i ? e.target.value : x) })} />
+              <Button variant="ghost" size="icon" onClick={() => upd("footer", { ...s.footer, payment_badges: s.footer.payment_badges.filter((_: string, idx: number) => idx !== i) })}><Trash2 className="h-4 w-4" /></Button>
+            </div>
+          ))}
+          <Button variant="outline" size="sm" onClick={() => upd("footer", { ...(s.footer ?? {}), payment_badges: [...(s.footer?.payment_badges ?? []), ""] })}><Plus className="h-3 w-3 mr-1" />Add badge</Button>
+        </div>
+
+        <div><Label>Copyright text</Label><Input placeholder="© {year} {brand}. All rights reserved." value={s.footer?.copyright ?? ""} onChange={(e) => upd("footer", { ...(s.footer ?? {}), copyright: e.target.value })} /></div>
+        <p className="text-xs text-muted-foreground">Use <code>{"{year}"}</code> and <code>{"{brand}"}</code> as placeholders.</p>
+      </section>
+
       <section className="space-y-3">
         <h2 className="font-semibold">SEO defaults</h2>
         <div><Label>Title</Label><Input value={s.seo?.title ?? ""} onChange={(e) => upd("seo", { ...(s.seo ?? {}), title: e.target.value })} /></div>
         <div><Label>Description</Label><Textarea value={s.seo?.description ?? ""} onChange={(e) => upd("seo", { ...(s.seo ?? {}), description: e.target.value })} /></div>
         <div><Label>OG image URL</Label><Input value={s.seo?.og_image ?? ""} onChange={(e) => upd("seo", { ...(s.seo ?? {}), og_image: e.target.value })} /></div>
       </section>
+
 
       <div className="sticky bottom-4">
         <Button size="lg" onClick={() => save.mutate()} disabled={save.isPending}>{save.isPending ? "Saving…" : "Save all changes"}</Button>
