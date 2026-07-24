@@ -826,6 +826,26 @@ export type Database = {
         }
         Returns: boolean
       }
+      preview_discount: {
+        Args: { _code: string; _subtotal_cents: number }
+        Returns: {
+          code: string
+          discount_cents: number
+          id: string
+          type: Database["public"]["Enums"]["discount_type"]
+          value: number
+        }[]
+      }
+      redeem_discount: {
+        Args: { _code: string; _subtotal_cents: number }
+        Returns: {
+          code: string
+          discount_cents: number
+          id: string
+          type: Database["public"]["Enums"]["discount_type"]
+          value: number
+        }[]
+      }
     }
     Enums: {
       app_role: "admin" | "customer"

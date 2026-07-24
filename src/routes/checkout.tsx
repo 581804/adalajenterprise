@@ -93,6 +93,43 @@ function CheckoutPage() {
     if (shippingOptions && shippingOptions.length === 0) setSelectedShippingId("");
   }, [shippingOptions]);
 
+  // Discount code
+  const [discountInput, setDiscountInput] = useState("");
+  const [discount, setDiscount] = useState<{ code: string; type: "percent" | "fixed" | "free_shipping"; discount_cents: number } | null>(null);
+  const [applyingDiscount, setApplyingDiscount] = useState(false);
+
+  const applyDiscount = async () => {
+    const code = discountInput.trim();
+    if (!code) return;
+    setApplyingDiscount(true);
+    try {
+      const { data, error } = await supabase.rpc("preview_discount", { _code: code, _subtotal_cents: subtotal });
+      if (error) throw error;
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row) throw new Error("Invalid discount code");
+      setDiscount({ code: row.code, type: row.type, discount_cents: row.discount_cents ?? 0 });
+      toast.success(`Discount "${row.code}" applied`);
+    } catch (e: any) {
+      setDiscount(null);
+      toast.error(e.message ?? "Could not apply discount");
+    } finally {
+      setApplyingDiscount(false);
+    }
+  };
+  const removeDiscount = () => { setDiscount(null); setDiscountInput(""); };
+  // Re-validate discount if subtotal changes below minimum
+  useEffect(() => {
+    if (!discount) return;
+    // recompute amount for percent discounts when subtotal changes
+    if (discount.type === "percent" || discount.type === "fixed") {
+      supabase.rpc("preview_discount", { _code: discount.code, _subtotal_cents: subtotal }).then(({ data, error }) => {
+        if (error) { setDiscount(null); return; }
+        const row = Array.isArray(data) ? data[0] : data;
+        if (row) setDiscount({ code: row.code, type: row.type, discount_cents: row.discount_cents ?? 0 });
+      });
+    }
+  }, [subtotal]);
+
   // Compute totals from authoritative product data.
   const totals = useMemo(() => {
     const metaById = new Map<string, ProductMeta>();
@@ -155,17 +192,28 @@ function CheckoutPage() {
     if (selected) {
       shippingCents = selected.free_over_cents && subtotal >= selected.free_over_cents ? 0 : (selected.price_cents ?? 0);
     }
+    // Apply discount
+    let discountCents = 0;
+    if (discount) {
+      if (discount.type === "free_shipping") {
+        discountCents = shippingCents;
+        shippingCents = 0;
+      } else {
+        discountCents = Math.min(discount.discount_cents, subtotal);
+      }
+    }
     const totalTaxOnTop = taxExclusive + feeTaxExclusive;
     const totalInclusiveTax = taxInclusive + feeTaxInclusive;
-    const total = subtotal + shippingCents + feeTotal + totalTaxOnTop;
+    const total = Math.max(0, subtotal - discountCents + shippingCents + feeTotal + totalTaxOnTop);
     return {
       shippingCents,
       feeTotal,
       taxOnTop: totalTaxOnTop,
       inclusiveTax: totalInclusiveTax,
+      discountCents,
       total,
     };
-  }, [items, productMeta, subtotal, shippingOptions, selectedShippingId]);
+  }, [items, productMeta, subtotal, shippingOptions, selectedShippingId, discount]);
 
   const selectedShipping = shippingOptions?.find((r: any) => r.id === selectedShippingId);
 
@@ -193,6 +241,24 @@ function CheckoutPage() {
 
     setSubmitting(true);
     try {
+      // Redeem discount server-side to lock it in and increment usage counter
+      let finalDiscountCents = 0;
+      let finalDiscountCode: string | null = null;
+      if (discount) {
+        if (discount.type === "free_shipping") {
+          finalDiscountCents = totals.discountCents; // equals shipping saved
+          finalDiscountCode = discount.code;
+          const { error: redeemErr } = await supabase.rpc("redeem_discount", { _code: discount.code, _subtotal_cents: subtotal });
+          if (redeemErr) throw new Error(redeemErr.message);
+        } else {
+          const { data, error: redeemErr } = await supabase.rpc("redeem_discount", { _code: discount.code, _subtotal_cents: subtotal });
+          if (redeemErr) throw new Error(redeemErr.message);
+          const row = Array.isArray(data) ? data[0] : data;
+          finalDiscountCents = row?.discount_cents ?? 0;
+          finalDiscountCode = row?.code ?? discount.code;
+        }
+      }
+
       const { data: order, error } = await supabase.from("orders").insert({
         user_id: user.id,
         email: form.email,
@@ -201,7 +267,8 @@ function CheckoutPage() {
         shipping_cents: totals.shippingCents,
         tax_cents: totals.taxOnTop,
         fee_cents: totals.feeTotal,
-        discount_cents: 0,
+        discount_cents: finalDiscountCents,
+        discount_code: finalDiscountCode,
         total_cents: totals.total,
         currency,
         shipping_address: form,
@@ -306,8 +373,31 @@ function CheckoutPage() {
                 <span>{formatMoney(i.unit_price_cents * i.quantity, currency)}</span>
               </div>
             ))}
+            <div className="border-t pt-3 space-y-2">
+              {discount ? (
+                <div className="flex items-center justify-between text-sm bg-muted/40 rounded p-2">
+                  <span>Code <strong>{discount.code}</strong> applied</span>
+                  <Button type="button" variant="ghost" size="sm" onClick={removeDiscount}>Remove</Button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Discount code"
+                    value={discountInput}
+                    onChange={(e) => setDiscountInput(e.target.value.toUpperCase())}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); applyDiscount(); } }}
+                  />
+                  <Button type="button" variant="secondary" onClick={applyDiscount} disabled={applyingDiscount || !discountInput.trim()}>
+                    {applyingDiscount ? "…" : "Apply"}
+                  </Button>
+                </div>
+              )}
+            </div>
             <div className="border-t pt-3 space-y-1 text-sm">
               <div className="flex justify-between"><span>Subtotal</span><span>{formatMoney(subtotal, currency)}</span></div>
+              {totals.discountCents > 0 ? (
+                <div className="flex justify-between text-primary"><span>Discount{discount ? ` (${discount.code})` : ""}</span><span>-{formatMoney(totals.discountCents, currency)}</span></div>
+              ) : null}
               {totals.shippingCents > 0 ? (
                 <div className="flex justify-between"><span>Shipping{selectedShipping ? ` (${selectedShipping.name})` : ""}</span><span>{formatMoney(totals.shippingCents, currency)}</span></div>
               ) : selectedShipping ? (

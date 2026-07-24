@@ -25,7 +25,17 @@ function AdminDiscounts() {
   });
   const save = useMutation({
     mutationFn: async (d: any) => {
-      const payload = { ...d, code: d.code.toUpperCase(), value: Number(d.value) || 0, min_subtotal_cents: Number(d.min_subtotal_cents) || 0, usage_limit: d.usage_limit ? Number(d.usage_limit) : null };
+      const payload = {
+        code: d.code.toUpperCase().trim(),
+        description: d.description ?? null,
+        type: d.type,
+        value: Number(d.value) || 0,
+        min_subtotal_cents: Number(d.min_subtotal_cents) || 0,
+        usage_limit: d.unlimited ? null : (d.usage_limit ? Number(d.usage_limit) : null),
+        starts_at: d.starts_at ? new Date(d.starts_at).toISOString() : null,
+        ends_at: d.ends_at ? new Date(d.ends_at).toISOString() : null,
+        is_active: !!d.is_active,
+      };
       if (d.id) { const { error } = await supabase.from("discounts").update(payload).eq("id", d.id); if (error) throw error; }
       else { const { error } = await supabase.from("discounts").insert(payload); if (error) throw error; }
     },
@@ -42,8 +52,8 @@ function AdminDiscounts() {
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Discounts</h1>
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild><Button onClick={() => setEditing({ code: "", description: "", type: "percent", value: 10, is_active: true })}><Plus className="h-4 w-4 mr-2" />New</Button></DialogTrigger>
-          <DialogContent>
+          <DialogTrigger asChild><Button onClick={() => setEditing({ code: "", description: "", type: "percent", value: 10, is_active: true, unlimited: true, usage_limit: "", starts_at: "", ends_at: "" })}><Plus className="h-4 w-4 mr-2" />New</Button></DialogTrigger>
+          <DialogContent className="max-h-[85vh] overflow-y-auto">
             <DialogHeader><DialogTitle>{editing?.id ? "Edit" : "New"} discount</DialogTitle></DialogHeader>
             {editing ? (
               <div className="space-y-3">
@@ -59,9 +69,31 @@ function AdminDiscounts() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div><Label>Value</Label><Input type="number" value={editing.value} onChange={(e) => setEditing({ ...editing, value: e.target.value })} /></div>
-                <div><Label>Min subtotal (cents)</Label><Input type="number" value={editing.min_subtotal_cents ?? 0} onChange={(e) => setEditing({ ...editing, min_subtotal_cents: e.target.value })} /></div>
-                <div><Label>Usage limit</Label><Input type="number" value={editing.usage_limit ?? ""} onChange={(e) => setEditing({ ...editing, usage_limit: e.target.value })} /></div>
+                <div><Label>Value {editing.type === "percent" ? "(%)" : editing.type === "fixed" ? "(paise)" : ""}</Label><Input type="number" value={editing.value} onChange={(e) => setEditing({ ...editing, value: e.target.value })} /></div>
+                <div><Label>Min subtotal (paise)</Label><Input type="number" value={editing.min_subtotal_cents ?? 0} onChange={(e) => setEditing({ ...editing, min_subtotal_cents: e.target.value })} /></div>
+
+                <div className="border rounded-md p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Unlimited uses</Label>
+                    <Switch checked={editing.unlimited ?? !editing.usage_limit} onCheckedChange={(v) => setEditing({ ...editing, unlimited: v, usage_limit: v ? "" : editing.usage_limit })} />
+                  </div>
+                  {!(editing.unlimited ?? !editing.usage_limit) ? (
+                    <div><Label>Max uses</Label><Input type="number" min={1} value={editing.usage_limit ?? ""} onChange={(e) => setEditing({ ...editing, usage_limit: e.target.value })} /></div>
+                  ) : null}
+                  <p className="text-xs text-muted-foreground">Used so far: {editing.used_count ?? 0}</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Starts at</Label>
+                    <Input type="datetime-local" value={editing.starts_at ? String(editing.starts_at).slice(0, 16) : ""} onChange={(e) => setEditing({ ...editing, starts_at: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label>Expires at</Label>
+                    <Input type="datetime-local" value={editing.ends_at ? String(editing.ends_at).slice(0, 16) : ""} onChange={(e) => setEditing({ ...editing, ends_at: e.target.value })} />
+                  </div>
+                </div>
+
                 <div className="flex items-center gap-2"><Switch checked={editing.is_active} onCheckedChange={(v) => setEditing({ ...editing, is_active: v })} /><Label>Active</Label></div>
               </div>
             ) : null}

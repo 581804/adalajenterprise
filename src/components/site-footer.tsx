@@ -3,7 +3,21 @@ import { toast } from "sonner";
 import { useSiteSettingsOptional } from "@/hooks/use-site-settings";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Mail, Phone, MapPin } from "lucide-react";
+import { Mail, Phone, MapPin, Facebook, Instagram, Twitter, Youtube, Linkedin, Github, Globe, MessageCircle, Music2, Send } from "lucide-react";
+
+const SOCIAL_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  facebook: Facebook,
+  instagram: Instagram,
+  twitter: Twitter,
+  x: Twitter,
+  youtube: Youtube,
+  linkedin: Linkedin,
+  github: Github,
+  tiktok: Music2,
+  whatsapp: MessageCircle,
+  telegram: Send,
+  website: Globe,
+};
 
 export function SiteFooter() {
   const { data: settings } = useSiteSettingsOptional();
@@ -63,12 +77,23 @@ export function SiteFooter() {
             </a>
           ) : null}
           {socials.length ? (
-            <div className="flex gap-3 pt-1">
-              {socials.map(([name, url]) => (
-                <a key={name} href={url} target="_blank" rel="noreferrer" className="text-sm underline capitalize text-muted-foreground hover:text-foreground">
-                  {name}
-                </a>
-              ))}
+            <div className="flex gap-2 pt-1">
+              {socials.map(([name, url]) => {
+                const Icon = SOCIAL_ICONS[name.toLowerCase()] ?? Globe;
+                return (
+                  <a
+                    key={name}
+                    href={url}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={name}
+                    title={name.charAt(0).toUpperCase() + name.slice(1)}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border text-muted-foreground hover:text-foreground hover:border-foreground transition-colors"
+                  >
+                    <Icon className="h-4 w-4" />
+                  </a>
+                );
+              })}
             </div>
           ) : null}
         </div>
