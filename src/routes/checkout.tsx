@@ -93,6 +93,43 @@ function CheckoutPage() {
     if (shippingOptions && shippingOptions.length === 0) setSelectedShippingId("");
   }, [shippingOptions]);
 
+  // Discount code
+  const [discountInput, setDiscountInput] = useState("");
+  const [discount, setDiscount] = useState<{ code: string; type: "percent" | "fixed" | "free_shipping"; discount_cents: number } | null>(null);
+  const [applyingDiscount, setApplyingDiscount] = useState(false);
+
+  const applyDiscount = async () => {
+    const code = discountInput.trim();
+    if (!code) return;
+    setApplyingDiscount(true);
+    try {
+      const { data, error } = await supabase.rpc("preview_discount", { _code: code, _subtotal_cents: subtotal });
+      if (error) throw error;
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row) throw new Error("Invalid discount code");
+      setDiscount({ code: row.code, type: row.type, discount_cents: row.discount_cents ?? 0 });
+      toast.success(`Discount "${row.code}" applied`);
+    } catch (e: any) {
+      setDiscount(null);
+      toast.error(e.message ?? "Could not apply discount");
+    } finally {
+      setApplyingDiscount(false);
+    }
+  };
+  const removeDiscount = () => { setDiscount(null); setDiscountInput(""); };
+  // Re-validate discount if subtotal changes below minimum
+  useEffect(() => {
+    if (!discount) return;
+    // recompute amount for percent discounts when subtotal changes
+    if (discount.type === "percent" || discount.type === "fixed") {
+      supabase.rpc("preview_discount", { _code: discount.code, _subtotal_cents: subtotal }).then(({ data, error }) => {
+        if (error) { setDiscount(null); return; }
+        const row = Array.isArray(data) ? data[0] : data;
+        if (row) setDiscount({ code: row.code, type: row.type, discount_cents: row.discount_cents ?? 0 });
+      });
+    }
+  }, [subtotal]);
+
   // Compute totals from authoritative product data.
   const totals = useMemo(() => {
     const metaById = new Map<string, ProductMeta>();
