@@ -264,13 +264,14 @@ function CheckoutPage() {
             <div className="grid md:grid-cols-2 gap-4">
               <div><Label>Full name</Label><Input value={form.full_name} onChange={upd("full_name")} required /></div>
               <div><Label>Email</Label><Input type="email" value={form.email} onChange={upd("email")} required /></div>
-              <div className="md:col-span-2"><Label>Address</Label><Input value={form.line1} onChange={upd("line1")} required /></div>
-              <div className="md:col-span-2"><Label>Apartment / suite</Label><Input value={form.line2} onChange={upd("line2")} /></div>
-              <div><Label>City</Label><Input value={form.city} onChange={upd("city")} required /></div>
-              <div><Label>State/Region</Label><Input value={form.region} onChange={upd("region")} /></div>
-              <div><Label>Postal code</Label><Input value={form.postal_code} onChange={upd("postal_code")} required /></div>
-              <div><Label>Country</Label><Input value={form.country} onChange={upd("country")} required /></div>
-              <div><Label>Phone</Label><Input value={form.phone} onChange={upd("phone")} /></div>
+              <div className="md:col-span-2"><Label>Address *</Label><Input value={form.line1} onChange={upd("line1")} required /></div>
+              <div className="md:col-span-2"><Label>Apartment / suite *</Label><Input value={form.line2} onChange={upd("line2")} required /></div>
+              <div><Label>City *</Label><Input value={form.city} onChange={upd("city")} required /></div>
+              <div><Label>State/Region *</Label><Input value={form.region} onChange={upd("region")} required /></div>
+              <div><Label>Postal code *</Label><Input value={form.postal_code} onChange={upd("postal_code")} required /></div>
+              <div><Label>Country *</Label><Input value={form.country} onChange={upd("country")} required /></div>
+              <div><Label>Phone *</Label><Input value={form.phone} onChange={upd("phone")} required /></div>
+
             </div>
 
             {form.country ? (
