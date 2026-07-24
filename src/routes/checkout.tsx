@@ -373,8 +373,31 @@ function CheckoutPage() {
                 <span>{formatMoney(i.unit_price_cents * i.quantity, currency)}</span>
               </div>
             ))}
+            <div className="border-t pt-3 space-y-2">
+              {discount ? (
+                <div className="flex items-center justify-between text-sm bg-muted/40 rounded p-2">
+                  <span>Code <strong>{discount.code}</strong> applied</span>
+                  <Button type="button" variant="ghost" size="sm" onClick={removeDiscount}>Remove</Button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Discount code"
+                    value={discountInput}
+                    onChange={(e) => setDiscountInput(e.target.value.toUpperCase())}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); applyDiscount(); } }}
+                  />
+                  <Button type="button" variant="secondary" onClick={applyDiscount} disabled={applyingDiscount || !discountInput.trim()}>
+                    {applyingDiscount ? "…" : "Apply"}
+                  </Button>
+                </div>
+              )}
+            </div>
             <div className="border-t pt-3 space-y-1 text-sm">
               <div className="flex justify-between"><span>Subtotal</span><span>{formatMoney(subtotal, currency)}</span></div>
+              {totals.discountCents > 0 ? (
+                <div className="flex justify-between text-primary"><span>Discount{discount ? ` (${discount.code})` : ""}</span><span>-{formatMoney(totals.discountCents, currency)}</span></div>
+              ) : null}
               {totals.shippingCents > 0 ? (
                 <div className="flex justify-between"><span>Shipping{selectedShipping ? ` (${selectedShipping.name})` : ""}</span><span>{formatMoney(totals.shippingCents, currency)}</span></div>
               ) : selectedShipping ? (
