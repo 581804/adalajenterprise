@@ -241,6 +241,24 @@ function CheckoutPage() {
 
     setSubmitting(true);
     try {
+      // Redeem discount server-side to lock it in and increment usage counter
+      let finalDiscountCents = 0;
+      let finalDiscountCode: string | null = null;
+      if (discount) {
+        if (discount.type === "free_shipping") {
+          finalDiscountCents = totals.discountCents; // equals shipping saved
+          finalDiscountCode = discount.code;
+          const { error: redeemErr } = await supabase.rpc("redeem_discount", { _code: discount.code, _subtotal_cents: subtotal });
+          if (redeemErr) throw new Error(redeemErr.message);
+        } else {
+          const { data, error: redeemErr } = await supabase.rpc("redeem_discount", { _code: discount.code, _subtotal_cents: subtotal });
+          if (redeemErr) throw new Error(redeemErr.message);
+          const row = Array.isArray(data) ? data[0] : data;
+          finalDiscountCents = row?.discount_cents ?? 0;
+          finalDiscountCode = row?.code ?? discount.code;
+        }
+      }
+
       const { data: order, error } = await supabase.from("orders").insert({
         user_id: user.id,
         email: form.email,
@@ -249,7 +267,8 @@ function CheckoutPage() {
         shipping_cents: totals.shippingCents,
         tax_cents: totals.taxOnTop,
         fee_cents: totals.feeTotal,
-        discount_cents: 0,
+        discount_cents: finalDiscountCents,
+        discount_code: finalDiscountCode,
         total_cents: totals.total,
         currency,
         shipping_address: form,
