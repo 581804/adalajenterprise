@@ -172,6 +172,25 @@ function CheckoutPage() {
   const placeOrder = async () => {
     if (!user) { navigate({ to: "/auth", search: { next: "/checkout" } as any }); return; }
     if (items.length === 0) return;
+
+    const requiredFields: Array<[keyof typeof form, string]> = [
+      ["full_name", "Full name"],
+      ["email", "Email"],
+      ["line1", "Address"],
+      ["line2", "Apartment / suite"],
+      ["city", "City"],
+      ["region", "State/Region"],
+      ["postal_code", "Postal code"],
+      ["country", "Country"],
+      ["phone", "Phone"],
+    ];
+    for (const [key, label] of requiredFields) {
+      if (!String(form[key] ?? "").trim()) {
+        toast.error(`${label} is required`);
+        return;
+      }
+    }
+
     setSubmitting(true);
     try {
       const { data: order, error } = await supabase.from("orders").insert({
@@ -214,6 +233,7 @@ function CheckoutPage() {
       setSubmitting(false);
     }
   };
+
 
   if (loading) return null;
   if (items.length === 0) {
