@@ -7,8 +7,8 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
+import { GoogleOAuthProvider } from "@react-oauth/google";
 import { Toaster } from "@/components/ui/sonner";
-import { supabase } from "@/integrations/supabase/client";
 import { CartProvider } from "@/components/cart-provider";
 
 import appCss from "../styles.css?url";
@@ -108,26 +108,39 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
+// Client ID is safe to expose (it identifies the app to Google, it doesn't
+// authenticate anything by itself) — only the Client Secret must stay
+// server-side. Read via Vite's import.meta.env so it's inlined at build time.
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string;
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const router = useRouter();
 
   useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") {
-        router.invalidate();
-        if (event !== "SIGNED_OUT") queryClient.invalidateQueries();
-      }
-    });
-    return () => sub.subscription.unsubscribe();
+    // Fired by signOut()/notifySessionChanged() in use-session.ts, plus the
+    // native `storage` event for cross-tab sign-out — replaces Supabase's
+    // built-in onAuthStateChange.
+    const handleSessionChange = () => {
+      router.invalidate();
+      queryClient.invalidateQueries();
+    };
+    window.addEventListener("session-token-changed", handleSessionChange);
+    window.addEventListener("storage", handleSessionChange);
+    return () => {
+      window.removeEventListener("session-token-changed", handleSessionChange);
+      window.removeEventListener("storage", handleSessionChange);
+    };
   }, [router, queryClient]);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <CartProvider>
-        <Outlet />
-        <Toaster />
-      </CartProvider>
-    </QueryClientProvider>
+    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+      <QueryClientProvider client={queryClient}>
+        <CartProvider>
+          <Outlet />
+          <Toaster />
+        </CartProvider>
+      </QueryClientProvider>
+    </GoogleOAuthProvider>
   );
 }

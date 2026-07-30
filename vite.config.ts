@@ -12,4 +12,24 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  nitro: {
+    unenv: [
+      {
+        // Works around a server-build failure on the cloudflare-module
+        // target: tr46 (a transitive dep of mongoose -> mongodb ->
+        // mongodb-connection-string-url -> whatwg-url -> tr46) does
+        // `require("punycode/")` with a trailing slash — a deliberate
+        // directory-style import that asks for the real "punycode" npm
+        // package (not Node's deprecated built-in module of the same
+        // name). unenv's Node-compat layer doesn't know how to resolve
+        // that trailing-slash specifier, so point it at the actual
+        // installed package directly. This must go through Nitro's
+        // `unenv` option (not Vite's top-level `resolve.alias`) because
+        // Nitro's server environment builds with its own separate
+        // resolve config that doesn't inherit the outer one.
+        meta: { name: "punycode-directory-import-fix" },
+        alias: { "punycode/": "punycode" },
+      },
+    ],
+  },
 });

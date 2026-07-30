@@ -20,6 +20,15 @@ dist-ssr
 .wrangler/
 .dev.vars
 
+# Environment variables — this repo is public. The Supabase config
+# previously committed here was safe to expose (publishable/anon key, not
+# secret), but MongoDB connection strings, the Google OAuth Client Secret,
+# and the session JWT signing secret must never be committed. Copy
+# .env.example to .env locally and fill in real values there.
+.env
+.env.local
+.env.*.local
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
