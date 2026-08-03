@@ -20,6 +20,9 @@ dist-ssr
 .wrangler/
 .dev.vars
 
+# Vercel
+.vercel/
+
 # Environment variables — this repo is public. The Supabase config
 # previously committed here was safe to expose (publishable/anon key, not
 # secret), but MongoDB connection strings, the Google OAuth Client Secret,

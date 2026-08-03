@@ -13,28 +13,18 @@ export default defineConfig({
     server: { entry: "server" },
   },
   nitro: {
-    // The @lovable.dev/vite-tanstack-config types don't yet declare `unenv`
-    // on the nitro option, but Nitro's runtime config accepts it (confirmed:
-    // `npm run build` succeeds using this exact field). Cast narrowly here
-    // rather than suppressing the whole nitro block, so a real type error
-    // elsewhere in this config would still surface.
-    unenv: [
-      {
-        // Works around a server-build failure on the cloudflare-module
-        // target: tr46 (a transitive dep of mongoose -> mongodb ->
-        // mongodb-connection-string-url -> whatwg-url -> tr46) does
-        // `require("punycode/")` with a trailing slash — a deliberate
-        // directory-style import that asks for the real "punycode" npm
-        // package (not Node's deprecated built-in module of the same
-        // name). unenv's Node-compat layer doesn't know how to resolve
-        // that trailing-slash specifier, so point it at the actual
-        // installed package directly. This must go through Nitro's
-        // `unenv` option (not Vite's top-level `resolve.alias`) because
-        // Nitro's server environment builds with its own separate
-        // resolve config that doesn't inherit the outer one.
-        meta: { name: "punycode-directory-import-fix" },
-        alias: { "punycode/": "punycode" },
-      },
-    ],
+    // The zero-config default for this wrapper is `cloudflare-module`
+    // (Cloudflare Workers), which Vercel's build system cannot run as a
+    // Vercel serverless function. Since this project deploys to Vercel,
+    // the preset must be set explicitly — see:
+    // node_modules/@lovable.dev/vite-tanstack-config/dist/index.js, the
+    // `defaultPreset: "cloudflare-module"` line.
+    preset: "vercel",
+    // NOTE: the punycode/unenv workaround that used to live here (see git
+    // history) is no longer needed on this preset. It existed only because
+    // Cloudflare Workers builds go through unenv's Node-compatibility
+    // polyfill layer, where tr46's `require("punycode/")` couldn't resolve.
+    // Vercel's preset targets real Node.js, so that polyfill layer isn't
+    // in the picture and the native `punycode` package resolves normally.
   } as { preset?: string; unenv?: unknown[] },
 });
