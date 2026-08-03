@@ -2,7 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { adminListFeeCategories, adminCreateFeeCategory, adminUpdateFeeCategory, adminDeleteFeeCategory } from "@/integrations/mongodb/fee-category.functions";
+import { adminListTaxRates } from "@/integrations/mongodb/tax-rate.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,11 +36,11 @@ function AdminFees() {
 
   const { data: fees } = useQuery({
     queryKey: ["admin", "fees"],
-    queryFn: async () => (await supabase.from("fee_categories").select("*").order("name")).data ?? [],
+    queryFn: () => adminListFeeCategories(),
   });
   const { data: taxes } = useQuery({
     queryKey: ["admin", "taxes-for-fees"],
-    queryFn: async () => (await supabase.from("tax_rates").select("id, name").order("name")).data ?? [],
+    queryFn: () => adminListTaxRates(),
   });
 
   const save = useMutation({
@@ -54,13 +55,8 @@ function AdminFees() {
         tax_rate_id: f.tax_rate_id,
         is_active: f.is_active,
       };
-      if (f.id) {
-        const { error } = await supabase.from("fee_categories").update(payload).eq("id", f.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from("fee_categories").insert(payload);
-        if (error) throw error;
-      }
+      if (f.id) await adminUpdateFeeCategory({ data: { ...payload, id: f.id } });
+      else await adminCreateFeeCategory({ data: payload });
     },
     onSuccess: () => {
       toast.success("Saved");
@@ -71,10 +67,7 @@ function AdminFees() {
   });
 
   const del = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("fee_categories").delete().eq("id", id);
-      if (error) throw error;
-    },
+    mutationFn: (id: string) => adminDeleteFeeCategory({ data: { id } }),
     onSuccess: () => {
       toast.success("Deleted");
       qc.invalidateQueries({ queryKey: ["admin", "fees"] });

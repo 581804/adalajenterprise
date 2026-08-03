@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { adminListProducts, adminDeleteProduct } from "@/integrations/mongodb/product.functions";
+import { adminListCategories } from "@/integrations/mongodb/category.functions";
 import { Button } from "@/components/ui/button";
 import { formatMoney } from "@/lib/format";
 import { Plus, Pencil, Trash2 } from "lucide-react";
@@ -14,17 +15,18 @@ function AdminProducts() {
   const qc = useQueryClient();
   const { data: products } = useQuery({
     queryKey: ["admin", "products"],
-    queryFn: async () => {
-      const { data } = await supabase.from("products").select("*, categories(name)").order("created_at", { ascending: false });
-      return data ?? [];
-    },
+    queryFn: () => adminListProducts(),
   });
+  // Products only store category_id (no server-side join, unlike the
+  // original's embedded `categories(name)` select) — resolved here instead.
+  const { data: categories } = useQuery({
+    queryKey: ["admin", "categories"],
+    queryFn: () => adminListCategories(),
+  });
+  const categoryNameById = new Map((categories ?? []).map((c) => [c.id, c.name]));
 
   const del = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("products").delete().eq("id", id);
-      if (error) throw error;
-    },
+    mutationFn: (id: string) => adminDeleteProduct({ data: { id } }),
     onSuccess: () => { toast.success("Deleted"); qc.invalidateQueries({ queryKey: ["admin", "products"] }); },
     onError: (e: any) => toast.error(e.message),
   });
@@ -47,7 +49,7 @@ function AdminProducts() {
               <div>
                 <div className="font-medium">{p.title}</div>
                 <div className="text-xs text-muted-foreground">
-                  {p.categories?.name ?? "Uncategorized"} · {p.status} · Stock: {p.stock}
+                  {(p.category_id && categoryNameById.get(p.category_id)) ?? "Uncategorized"} · {p.status} · Stock: {p.stock}
                 </div>
               </div>
             </div>

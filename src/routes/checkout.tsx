@@ -2,7 +2,10 @@ import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { getProductCheckoutMeta } from "@/integrations/mongodb/product.functions";
+import { listActiveShippingForCountry } from "@/integrations/mongodb/shipping-zone.functions";
+import { createOrder } from "@/integrations/mongodb/order.functions";
+import { previewDiscountClient } from "@/integrations/mongodb/discount.functions";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { useCart } from "@/components/cart-provider";
@@ -17,25 +20,6 @@ export const Route = createFileRoute("/checkout")({
   component: CheckoutPage,
 });
 
-type ProductMeta = {
-  id: string;
-  tax_rate_id: string | null;
-  price_includes_tax: boolean;
-  fee_category_id: string | null;
-  tax_rates: { id: string; rate_percent: number; name: string } | null;
-  fee_categories:
-    | {
-        id: string;
-        name: string;
-        amount_cents: number;
-        percent: number;
-        scope: "per_unit" | "per_order";
-        taxable: boolean;
-        tax_rate_id: string | null;
-      }
-    | null;
-};
-
 function CheckoutPage() {
   const { items, subtotal, clear } = useCart();
   const { user, loading } = useSession();
@@ -49,16 +33,7 @@ function CheckoutPage() {
   const { data: productMeta } = useQuery({
     queryKey: ["checkout-product-meta", productIds],
     enabled: productIds.length > 0,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("products")
-        .select(
-          "id, tax_rate_id, price_includes_tax, fee_category_id, tax_rates:tax_rate_id(id, name, rate_percent), fee_categories:fee_category_id(id, name, amount_cents, percent, scope, taxable, tax_rate_id)",
-        )
-        .in("id", productIds);
-      if (error) throw error;
-      return (data ?? []) as unknown as ProductMeta[];
-    },
+    queryFn: () => getProductCheckoutMeta({ data: { productIds } }),
   });
 
   const [form, setForm] = useState({
@@ -70,30 +45,25 @@ function CheckoutPage() {
   }, [user]);
   const upd = (k: keyof typeof form) => (e: any) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
-  const { data: shippingOptions } = useQuery({
-    queryKey: ["checkout-shipping", form.country?.toUpperCase()],
-    queryFn: async () => {
-      const country = form.country?.trim().toUpperCase();
-      if (!country) return [] as { id: string; name: string; price_cents: number; free_over_cents: number | null }[];
-      const { data, error } = await supabase
-        .from("shipping_zones")
-        .select("id, countries, is_active, shipping_rates(id, name, price_cents, free_over_cents, is_active)")
-        .eq("is_active", true);
-      if (error) throw error;
-      const matched = (data ?? []).filter((z: any) => (z.countries ?? []).map((c: string) => c.toUpperCase()).includes(country));
-      return matched.flatMap((z: any) => (z.shipping_rates ?? []).filter((r: any) => r.is_active)) as any[];
-    },
+  const { data: shippingZones } = useQuery({
+    queryKey: ["checkout-shipping", form.country?.trim().toUpperCase()],
+    enabled: !!form.country?.trim(),
+    queryFn: () => listActiveShippingForCountry({ data: { country: form.country.trim().toUpperCase() } }),
   });
+  const shippingOptions = useMemo(
+    () => (shippingZones ?? []).flatMap((z) => z.shipping_rates.map((r) => ({ ...r, zoneId: z.id }))),
+    [shippingZones],
+  );
 
   const [selectedShippingId, setSelectedShippingId] = useState<string>("");
   useEffect(() => {
-    if (shippingOptions && shippingOptions.length && !shippingOptions.find((r) => r.id === selectedShippingId)) {
+    if (shippingOptions.length && !shippingOptions.find((r) => r.id === selectedShippingId)) {
       setSelectedShippingId(shippingOptions[0].id);
     }
-    if (shippingOptions && shippingOptions.length === 0) setSelectedShippingId("");
+    if (shippingOptions.length === 0) setSelectedShippingId("");
   }, [shippingOptions]);
+  const selectedShipping = shippingOptions.find((r) => r.id === selectedShippingId);
 
-  // Discount code
   const [discountInput, setDiscountInput] = useState("");
   const [discount, setDiscount] = useState<{ code: string; type: "percent" | "fixed" | "free_shipping"; discount_cents: number } | null>(null);
   const [applyingDiscount, setApplyingDiscount] = useState(false);
@@ -103,12 +73,9 @@ function CheckoutPage() {
     if (!code) return;
     setApplyingDiscount(true);
     try {
-      const { data, error } = await supabase.rpc("preview_discount", { _code: code, _subtotal_cents: subtotal });
-      if (error) throw error;
-      const row = Array.isArray(data) ? data[0] : data;
-      if (!row) throw new Error("Invalid discount code");
-      setDiscount({ code: row.code, type: row.type, discount_cents: row.discount_cents ?? 0 });
-      toast.success(`Discount "${row.code}" applied`);
+      const result = await previewDiscountClient({ data: { code, subtotalCents: subtotal } });
+      setDiscount({ code: result.code, type: result.type, discount_cents: result.discountCents });
+      toast.success(`Discount "${result.code}" applied`);
     } catch (e: any) {
       setDiscount(null);
       toast.error(e.message ?? "Could not apply discount");
@@ -117,32 +84,23 @@ function CheckoutPage() {
     }
   };
   const removeDiscount = () => { setDiscount(null); setDiscountInput(""); };
-  // Re-validate discount if subtotal changes below minimum
   useEffect(() => {
     if (!discount) return;
-    // recompute amount for percent discounts when subtotal changes
-    if (discount.type === "percent" || discount.type === "fixed") {
-      supabase.rpc("preview_discount", { _code: discount.code, _subtotal_cents: subtotal }).then(({ data, error }) => {
-        if (error) { setDiscount(null); return; }
-        const row = Array.isArray(data) ? data[0] : data;
-        if (row) setDiscount({ code: row.code, type: row.type, discount_cents: row.discount_cents ?? 0 });
-      });
-    }
+    previewDiscountClient({ data: { code: discount.code, subtotalCents: subtotal } })
+      .then((result) => setDiscount({ code: result.code, type: result.type, discount_cents: result.discountCents }))
+      .catch(() => setDiscount(null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subtotal]);
 
-  // Compute totals from authoritative product data.
   const totals = useMemo(() => {
-    const metaById = new Map<string, ProductMeta>();
-    (productMeta ?? []).forEach((m) => metaById.set(m.id, m));
-
-    let taxExclusive = 0; // added on top
-    let taxInclusive = 0; // informational
+    type ProductMetaItem = NonNullable<typeof productMeta>[number];
+    const metaById = new Map((productMeta ?? []).map((m) => [m.id, m]));
+    let taxExclusive = 0;
+    let taxInclusive = 0;
     let feeTotal = 0;
     let feeTaxExclusive = 0;
     let feeTaxInclusive = 0;
-
-    // per-order fees only counted once per fee_category
-    const perOrderFees = new Map<string, ProductMeta["fee_categories"]>();
+    const perOrderFees = new Map<string, ProductMetaItem["fee_categories"]>();
 
     for (const item of items) {
       const meta = metaById.get(item.product_id);
@@ -150,49 +108,33 @@ function CheckoutPage() {
       const taxPct = meta?.tax_rates?.rate_percent ?? 0;
 
       if (taxPct > 0) {
-        if (meta?.price_includes_tax) {
-          // tax portion inside price: price * (rate / (100 + rate))
-          taxInclusive += Math.round(lineSubtotal * (taxPct / (100 + taxPct)));
-        } else {
-          taxExclusive += Math.round(lineSubtotal * (taxPct / 100));
-        }
+        if (meta?.price_includes_tax) taxInclusive += Math.round(lineSubtotal * (taxPct / (100 + taxPct)));
+        else taxExclusive += Math.round(lineSubtotal * (taxPct / 100));
       }
 
       const fee = meta?.fee_categories;
       if (fee) {
         if (fee.scope === "per_unit") {
-          const feeAmt = (fee.amount_cents ?? 0) * item.quantity + Math.round(item.unit_price_cents * item.quantity * (Number(fee.percent) || 0) / 100);
+          const feeAmt = (fee.amount_cents ?? 0) * item.quantity + Math.round((lineSubtotal * (Number(fee.percent) || 0)) / 100);
           feeTotal += feeAmt;
-          if (fee.taxable) {
-            const feeTaxPct = (fee.tax_rate_id ? undefined : taxPct) ?? taxPct;
-            // use fee's own tax rate if configured (needs a fetch); for simplicity fall back to product tax
-            const applyPct = feeTaxPct;
-            if (applyPct > 0) {
-              if (meta?.price_includes_tax) feeTaxInclusive += Math.round(feeAmt * (applyPct / (100 + applyPct)));
-              else feeTaxExclusive += Math.round(feeAmt * (applyPct / 100));
-            }
+          if (fee.taxable && taxPct > 0) {
+            if (meta?.price_includes_tax) feeTaxInclusive += Math.round(feeAmt * (taxPct / (100 + taxPct)));
+            else feeTaxExclusive += Math.round(feeAmt * (taxPct / 100));
           }
         } else if (!perOrderFees.has(fee.id)) {
           perOrderFees.set(fee.id, fee);
         }
       }
     }
-
     for (const fee of perOrderFees.values()) {
       if (!fee) continue;
-      const flat = fee.amount_cents ?? 0;
-      const pctPart = Math.round(subtotal * (Number(fee.percent) || 0) / 100);
-      const feeAmt = flat + pctPart;
-      feeTotal += feeAmt;
-      // per-order fees don't know product tax; skip taxing them unless taxable + fee has own rate → out of scope for MVP
+      feeTotal += (fee.amount_cents ?? 0) + Math.round((subtotal * (Number(fee.percent) || 0)) / 100);
     }
 
-    const selected = shippingOptions?.find((r: any) => r.id === selectedShippingId);
     let shippingCents = 0;
-    if (selected) {
-      shippingCents = selected.free_over_cents && subtotal >= selected.free_over_cents ? 0 : (selected.price_cents ?? 0);
+    if (selectedShipping) {
+      shippingCents = selectedShipping.free_over_cents && subtotal >= selectedShipping.free_over_cents ? 0 : selectedShipping.price_cents;
     }
-    // Apply discount
     let discountCents = 0;
     if (discount) {
       if (discount.type === "free_shipping") {
@@ -202,94 +144,39 @@ function CheckoutPage() {
         discountCents = Math.min(discount.discount_cents, subtotal);
       }
     }
-    const totalTaxOnTop = taxExclusive + feeTaxExclusive;
-    const totalInclusiveTax = taxInclusive + feeTaxInclusive;
-    const total = Math.max(0, subtotal - discountCents + shippingCents + feeTotal + totalTaxOnTop);
-    return {
-      shippingCents,
-      feeTotal,
-      taxOnTop: totalTaxOnTop,
-      inclusiveTax: totalInclusiveTax,
-      discountCents,
-      total,
-    };
-  }, [items, productMeta, subtotal, shippingOptions, selectedShippingId, discount]);
-
-  const selectedShipping = shippingOptions?.find((r: any) => r.id === selectedShippingId);
+    const taxOnTop = taxExclusive + feeTaxExclusive;
+    const inclusiveTax = taxInclusive + feeTaxInclusive;
+    const total = Math.max(0, subtotal - discountCents + shippingCents + feeTotal + taxOnTop);
+    return { shippingCents, feeTotal, taxOnTop, inclusiveTax, discountCents, total };
+  }, [items, productMeta, subtotal, selectedShipping, discount]);
 
   const placeOrder = async () => {
     if (!user) { navigate({ to: "/auth", search: { next: "/checkout" } as any }); return; }
     if (items.length === 0) return;
 
     const requiredFields: Array<[keyof typeof form, string]> = [
-      ["full_name", "Full name"],
-      ["email", "Email"],
-      ["line1", "Address"],
-      ["line2", "Apartment / suite"],
-      ["city", "City"],
-      ["region", "State/Region"],
-      ["postal_code", "Postal code"],
-      ["country", "Country"],
-      ["phone", "Phone"],
+      ["full_name", "Full name"], ["email", "Email"], ["line1", "Address"], ["line2", "Apartment / suite"],
+      ["city", "City"], ["region", "State/Region"], ["postal_code", "Postal code"], ["country", "Country"], ["phone", "Phone"],
     ];
     for (const [key, label] of requiredFields) {
-      if (!String(form[key] ?? "").trim()) {
-        toast.error(`${label} is required`);
-        return;
-      }
+      if (!String(form[key] ?? "").trim()) { toast.error(`${label} is required`); return; }
     }
 
     setSubmitting(true);
     try {
-      // Redeem discount server-side to lock it in and increment usage counter
-      let finalDiscountCents = 0;
-      let finalDiscountCode: string | null = null;
-      if (discount) {
-        if (discount.type === "free_shipping") {
-          finalDiscountCents = totals.discountCents; // equals shipping saved
-          finalDiscountCode = discount.code;
-          const { error: redeemErr } = await supabase.rpc("redeem_discount", { _code: discount.code, _subtotal_cents: subtotal });
-          if (redeemErr) throw new Error(redeemErr.message);
-        } else {
-          const { data, error: redeemErr } = await supabase.rpc("redeem_discount", { _code: discount.code, _subtotal_cents: subtotal });
-          if (redeemErr) throw new Error(redeemErr.message);
-          const row = Array.isArray(data) ? data[0] : data;
-          finalDiscountCents = row?.discount_cents ?? 0;
-          finalDiscountCode = row?.code ?? discount.code;
-        }
-      }
-
-      const { data: order, error } = await supabase.from("orders").insert({
-        user_id: user.id,
-        email: form.email,
-        status: "pending",
-        subtotal_cents: subtotal,
-        shipping_cents: totals.shippingCents,
-        tax_cents: totals.taxOnTop,
-        fee_cents: totals.feeTotal,
-        discount_cents: finalDiscountCents,
-        discount_code: finalDiscountCode,
-        total_cents: totals.total,
-        currency,
-        shipping_address: form,
-        billing_address: form,
-        shipping_method: selectedShipping?.name ?? null,
-      }).select().single();
-      if (error) throw error;
-
-      const { error: itemsError } = await supabase.from("order_items").insert(
-        items.map((i) => ({
-          order_id: order.id,
-          product_id: i.product_id,
-          variant_id: i.variant_id,
-          title: i.title,
-          variant_name: i.variant_name,
-          unit_price_cents: i.unit_price_cents,
-          quantity: i.quantity,
-          image_url: i.image_url,
-        })),
-      );
-      if (itemsError) throw itemsError;
+      const order = await createOrder({
+        data: {
+          items: items.map((i) => ({ product_id: i.product_id, variant_id: i.variant_id, quantity: i.quantity })),
+          email: form.email,
+          shippingAddress: {
+            full_name: form.full_name, line1: form.line1, line2: form.line2, city: form.city,
+            region: form.region, postal_code: form.postal_code, country: form.country, phone: form.phone,
+          },
+          shippingZoneId: selectedShipping?.zoneId ?? null,
+          shippingRateId: selectedShipping?.id ?? null,
+          discountCode: discount?.code ?? null,
+        },
+      });
 
       clear();
       toast.success("Order placed! Payment will be collected when payments are enabled.");
@@ -300,7 +187,6 @@ function CheckoutPage() {
       setSubmitting(false);
     }
   };
-
 
   if (loading) return null;
   if (items.length === 0) {
@@ -338,15 +224,14 @@ function CheckoutPage() {
               <div><Label>Postal code *</Label><Input value={form.postal_code} onChange={upd("postal_code")} required /></div>
               <div><Label>Country *</Label><Input value={form.country} onChange={upd("country")} required /></div>
               <div><Label>Phone *</Label><Input value={form.phone} onChange={upd("phone")} required /></div>
-
             </div>
 
             {form.country ? (
               <div className="pt-4">
                 <h2 className="font-semibold text-lg mb-2">Shipping method</h2>
-                {shippingOptions && shippingOptions.length > 0 ? (
+                {shippingOptions.length > 0 ? (
                   <div className="space-y-2">
-                    {shippingOptions.map((r: any) => {
+                    {shippingOptions.map((r) => {
                       const free = r.free_over_cents && subtotal >= r.free_over_cents;
                       return (
                         <label key={r.id} className={`flex items-center justify-between border rounded p-3 cursor-pointer ${selectedShippingId === r.id ? "border-primary bg-muted/30" : ""}`}>

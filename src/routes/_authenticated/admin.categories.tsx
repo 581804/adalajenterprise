@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { adminListCategories, adminCreateCategory, adminUpdateCategory, adminDeleteCategory } from "@/integrations/mongodb/category.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,21 +22,21 @@ function AdminCategories() {
 
   const { data: cats } = useQuery({
     queryKey: ["admin", "categories"],
-    queryFn: async () => (await supabase.from("categories").select("*").order("sort_order")).data ?? [],
+    queryFn: () => adminListCategories(),
   });
 
   const save = useMutation({
     mutationFn: async (c: any) => {
       const payload = { ...c, slug: c.slug || slugify(c.name), sort_order: Number(c.sort_order) || 0 };
-      if (c.id) { const { error } = await supabase.from("categories").update(payload).eq("id", c.id); if (error) throw error; }
-      else { const { error } = await supabase.from("categories").insert(payload); if (error) throw error; }
+      if (c.id) await adminUpdateCategory({ data: payload });
+      else await adminCreateCategory({ data: payload });
     },
     onSuccess: () => { toast.success("Saved"); qc.invalidateQueries({ queryKey: ["admin", "categories"] }); setOpen(false); setEditing(null); },
     onError: (e: any) => toast.error(e.message),
   });
 
   const del = useMutation({
-    mutationFn: async (id: string) => { const { error } = await supabase.from("categories").delete().eq("id", id); if (error) throw error; },
+    mutationFn: (id: string) => adminDeleteCategory({ data: { id } }),
     onSuccess: () => { toast.success("Deleted"); qc.invalidateQueries({ queryKey: ["admin", "categories"] }); },
     onError: (e: any) => toast.error(e.message),
   });

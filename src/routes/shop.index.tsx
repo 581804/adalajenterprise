@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { listProducts } from "@/integrations/mongodb/product.functions";
+import { listActiveCategories } from "@/integrations/mongodb/category.functions";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { ProductCard } from "@/components/product-card";
@@ -21,32 +22,20 @@ export const Route = createFileRoute("/shop/")({
 
 function ShopIndex() {
   const { data: settings } = useSiteSettingsOptional();
-  const [sort, setSort] = useState("newest");
+  const [sort, setSort] = useState<"newest" | "price_asc" | "price_desc">("newest");
   const [categoryId, setCategoryId] = useState<string>("all");
 
   const { data: categories } = useQuery({
     queryKey: ["categories", "all"],
-    queryFn: async () => {
-      const { data } = await supabase.from("categories").select("id, slug, name").eq("is_active", true).order("sort_order");
-      return data ?? [];
-    },
+    queryFn: () => listActiveCategories(),
   });
 
   const { data: products, isLoading } = useQuery({
     queryKey: ["products", "shop", sort, categoryId],
-    queryFn: async () => {
-      let q = supabase
-        .from("products")
-        .select("id, slug, title, price_cents, compare_at_cents, images, currency")
-        .eq("status", "active");
-      if (categoryId !== "all") q = q.eq("category_id", categoryId);
-      if (sort === "newest") q = q.order("created_at", { ascending: false });
-      if (sort === "price_asc") q = q.order("price_cents", { ascending: true });
-      if (sort === "price_desc") q = q.order("price_cents", { ascending: false });
-      const { data, error } = await q.limit(60);
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: () =>
+      listProducts({
+        data: { status: "active", sort, categoryId: categoryId !== "all" ? categoryId : undefined, limit: 60 },
+      }),
   });
 
   return (
@@ -65,7 +54,7 @@ function ShopIndex() {
                 ))}
               </SelectContent>
             </Select>
-            <Select value={sort} onValueChange={setSort}>
+            <Select value={sort} onValueChange={(v) => setSort(v as typeof sort)}>
               <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="newest">Newest</SelectItem>

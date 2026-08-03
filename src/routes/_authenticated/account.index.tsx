@@ -1,7 +1,8 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { listMyOrders } from "@/integrations/mongodb/order.functions";
+import { signOut as clearSession } from "@/integrations/mongodb/use-session";
 import { useSession } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,14 +46,7 @@ function Account() {
   const { data: orders } = useQuery({
     queryKey: ["account", "orders", user?.id],
     enabled: !!user,
-    queryFn: async () =>
-      (
-        await supabase
-          .from("orders")
-          .select("*, order_items(id, title, quantity, image_url)")
-          .eq("user_id", user!.id)
-          .order("created_at", { ascending: false })
-      ).data ?? [],
+    queryFn: () => listMyOrders(),
   });
 
   const filtered = useMemo(() => {
@@ -73,7 +67,7 @@ function Account() {
   }, [orders, q, from, to]);
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    clearSession();
     navigate({ to: "/" });
   };
 

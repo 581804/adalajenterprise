@@ -2,7 +2,7 @@ import { createFileRoute, notFound } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { getProductBySlug } from "@/integrations/mongodb/product.functions";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { Button } from "@/components/ui/button";
@@ -25,14 +25,9 @@ function ProductPage() {
   const { data: product, isLoading } = useQuery({
     queryKey: ["product", slug],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("products")
-        .select("*, product_variants(*)")
-        .eq("slug", slug)
-        .maybeSingle();
-      if (error) throw error;
-      if (!data) throw notFound();
-      return data;
+      const result = await getProductBySlug({ data: { slug } });
+      if (!result) throw notFound();
+      return result;
     },
   });
 

@@ -1,7 +1,7 @@
 import { createFileRoute, Link, Outlet, useRouterState, useNavigate, redirect } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { signOut as clearSession } from "@/integrations/mongodb/use-session";
 import { useIsAdmin, useSession } from "@/hooks/use-auth";
 import {
   Sidebar,
@@ -73,7 +73,7 @@ function AdminLayout() {
     exact ? pathname === url : pathname === url || pathname.startsWith(url + "/");
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    clearSession();
     navigate({ to: "/" });
   };
 

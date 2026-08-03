@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { adminListOrders, adminUpdateOrder } from "@/integrations/mongodb/order.functions";
 import { formatMoney } from "@/lib/format";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useEffect, useState } from "react";
@@ -22,23 +22,17 @@ function AdminOrders() {
   const [selected, setSelected] = useState<any | null>(null);
   const { data: orders } = useQuery({
     queryKey: ["admin", "orders"],
-    queryFn: async () => (await supabase.from("orders").select("*, order_items(*)").order("created_at", { ascending: false })).data ?? [],
+    queryFn: () => adminListOrders(),
   });
 
   const updateOrder = useMutation({
-    mutationFn: async ({ id, patch }: { id: string; patch: any }) => {
-      const { error } = await supabase.from("orders").update(patch).eq("id", id);
-      if (error) throw error;
-    },
+    mutationFn: ({ id, patch }: { id: string; patch: any }) => adminUpdateOrder({ data: { id, ...patch } }),
     onSuccess: () => { toast.success("Updated"); qc.invalidateQueries({ queryKey: ["admin", "orders"] }); },
     onError: (e: any) => toast.error(e.message),
   });
 
   const changeStatus = (o: any, status: string) => {
-    const patch: any = { status };
-    if (status === "shipped" && !o.shipped_at) patch.shipped_at = new Date().toISOString();
-    if (status === "delivered" && !o.delivered_at) patch.delivered_at = new Date().toISOString();
-    updateOrder.mutate({ id: o.id, patch });
+    updateOrder.mutate({ id: o.id, patch: { status } });
   };
 
   return (

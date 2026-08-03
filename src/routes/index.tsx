@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { listProducts } from "@/integrations/mongodb/product.functions";
+import { listActiveCategories } from "@/integrations/mongodb/category.functions";
 import { useSiteSettingsOptional } from "@/hooks/use-site-settings";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
@@ -18,44 +19,17 @@ function HomePage() {
 
   const { data: featured } = useQuery({
     queryKey: ["products", "featured"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("products")
-        .select("id, slug, title, price_cents, compare_at_cents, images, currency")
-        .eq("status", "active")
-        .eq("is_featured", true)
-        .limit(8);
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: () => listProducts({ data: { status: "active", featured: true, limit: 8 } }),
   });
 
   const { data: allProducts } = useQuery({
     queryKey: ["products", "recent"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("products")
-        .select("id, slug, title, price_cents, compare_at_cents, images, currency")
-        .eq("status", "active")
-        .order("created_at", { ascending: false })
-        .limit(8);
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: () => listProducts({ data: { status: "active", sort: "newest", limit: 8 } }),
   });
 
   const { data: categories } = useQuery({
     queryKey: ["categories", "top"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("categories")
-        .select("id, slug, name, image_url")
-        .eq("is_active", true)
-        .order("sort_order")
-        .limit(6);
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: async () => (await listActiveCategories()).slice(0, 6),
   });
 
   const showFeatured = (featured?.length ?? 0) > 0 ? featured : allProducts;

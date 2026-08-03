@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { adminUpdateSiteSettings } from "@/integrations/mongodb/site-settings.functions";
 import { useSiteSettingsOptional } from "@/hooks/use-site-settings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,10 +23,7 @@ function AdminBranding() {
   useEffect(() => { if (initial && !s) setS(initial); }, [initial]);
 
   const save = useMutation({
-    mutationFn: async () => {
-      const { error } = await supabase.from("site_settings").update(s).eq("id", 1);
-      if (error) throw error;
-    },
+    mutationFn: () => adminUpdateSiteSettings({ data: s }),
     onSuccess: () => { toast.success("Saved"); qc.invalidateQueries({ queryKey: ["site_settings"] }); },
     onError: (e: any) => toast.error(e.message),
   });

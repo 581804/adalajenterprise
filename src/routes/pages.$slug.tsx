@@ -1,6 +1,6 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { getPageBySlug } from "@/integrations/mongodb/page.functions";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 
@@ -13,10 +13,9 @@ function CmsPage() {
   const { data } = useQuery({
     queryKey: ["page", slug],
     queryFn: async () => {
-      const { data, error } = await supabase.from("pages").select("*").eq("slug", slug).eq("is_published", true).maybeSingle();
-      if (error) throw error;
-      if (!data) throw notFound();
-      return data;
+      const result = await getPageBySlug({ data: { slug } });
+      if (!result) throw notFound();
+      return result;
     },
   });
 

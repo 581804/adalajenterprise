@@ -54,6 +54,12 @@ export async function signInWithGoogleIdToken(idToken: string): Promise<{ sessio
 
   await connectMongo();
 
+  // Replaces the bootstrap_first_admin Postgres trigger: the very first user
+  // ever created becomes admin automatically, so there's always at least one
+  // admin without a manual DB edit. Only matters on the insert path (a
+  // returning user's role should never be silently changed here).
+  const isFirstEverUser = (await User.estimatedDocumentCount()) === 0;
+
   const user = await User.findOneAndUpdate(
     { googleId: payload.sub },
     {
@@ -65,7 +71,7 @@ export async function signInWithGoogleIdToken(idToken: string): Promise<{ sessio
       },
       $setOnInsert: {
         googleId: payload.sub,
-        role: "customer",
+        role: isFirstEverUser ? "admin" : "customer",
       },
     },
     { upsert: true, new: true },

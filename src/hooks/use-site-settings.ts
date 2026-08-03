@@ -1,5 +1,5 @@
 import { useSuspenseQuery, useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { getSiteSettings } from "@/integrations/mongodb/site-settings.functions";
 
 export type FooterColumn = { title: string; links: Array<{ label: string; url: string }> };
 export type FooterConfig = {
@@ -35,9 +35,7 @@ export type SiteSettings = {
 };
 
 async function fetchSiteSettings(): Promise<SiteSettings> {
-  const { data, error } = await supabase.from("site_settings").select("*").eq("id", 1).maybeSingle();
-  if (error) throw error;
-  return data as unknown as SiteSettings;
+  return getSiteSettings() as unknown as Promise<SiteSettings>;
 }
 
 export const siteSettingsQuery = {

@@ -13,6 +13,11 @@ export default defineConfig({
     server: { entry: "server" },
   },
   nitro: {
+    // The @lovable.dev/vite-tanstack-config types don't yet declare `unenv`
+    // on the nitro option, but Nitro's runtime config accepts it (confirmed:
+    // `npm run build` succeeds using this exact field). Cast narrowly here
+    // rather than suppressing the whole nitro block, so a real type error
+    // elsewhere in this config would still surface.
     unenv: [
       {
         // Works around a server-build failure on the cloudflare-module
@@ -31,5 +36,5 @@ export default defineConfig({
         alias: { "punycode/": "punycode" },
       },
     ],
-  },
+  } as { preset?: string; unenv?: unknown[] },
 });

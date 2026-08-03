@@ -16,6 +16,7 @@ const userSchema = new Schema(
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     emailVerified: { type: Boolean, default: false },
     name: { type: String, required: true, trim: true },
+    phone: { type: String, trim: true },
     avatarUrl: { type: String },
     role: { type: String, enum: USER_ROLES, default: "customer", required: true },
   },

@@ -1,6 +1,7 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { getCategoryBySlug } from "@/integrations/mongodb/category.functions";
+import { listProducts } from "@/integrations/mongodb/product.functions";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { ProductCard } from "@/components/product-card";
@@ -17,25 +18,16 @@ function CategoryPage() {
   const { data: cat } = useQuery({
     queryKey: ["category", category],
     queryFn: async () => {
-      const { data, error } = await supabase.from("categories").select("*").eq("slug", category).maybeSingle();
-      if (error) throw error;
-      if (!data) throw notFound();
-      return data;
+      const result = await getCategoryBySlug({ data: { slug: category } });
+      if (!result) throw notFound();
+      return result;
     },
   });
 
   const { data: products } = useQuery({
     queryKey: ["products", "cat", cat?.id],
     enabled: !!cat?.id,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("products")
-        .select("id, slug, title, price_cents, compare_at_cents, images, currency")
-        .eq("status", "active")
-        .eq("category_id", cat!.id)
-        .order("created_at", { ascending: false });
-      return data ?? [];
-    },
+    queryFn: () => listProducts({ data: { status: "active", categoryId: cat!.id, sort: "newest" } }),
   });
 
   return (

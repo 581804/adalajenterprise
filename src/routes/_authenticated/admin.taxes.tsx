@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { adminListTaxRates, adminCreateTaxRate, adminUpdateTaxRate, adminDeleteTaxRate } from "@/integrations/mongodb/tax-rate.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,19 +20,19 @@ function AdminTaxes() {
   const [open, setOpen] = useState(false);
   const { data } = useQuery({
     queryKey: ["admin", "taxes"],
-    queryFn: async () => (await supabase.from("tax_rates").select("*").order("country")).data ?? [],
+    queryFn: () => adminListTaxRates(),
   });
   const save = useMutation({
     mutationFn: async (t: any) => {
       const payload = { ...t, rate_percent: Number(t.rate_percent) || 0 };
-      if (t.id) { const { error } = await supabase.from("tax_rates").update(payload).eq("id", t.id); if (error) throw error; }
-      else { const { error } = await supabase.from("tax_rates").insert(payload); if (error) throw error; }
+      if (t.id) await adminUpdateTaxRate({ data: payload });
+      else await adminCreateTaxRate({ data: payload });
     },
     onSuccess: () => { toast.success("Saved"); qc.invalidateQueries({ queryKey: ["admin", "taxes"] }); setOpen(false); },
     onError: (e: any) => toast.error(e.message),
   });
   const del = useMutation({
-    mutationFn: async (id: string) => { const { error } = await supabase.from("tax_rates").delete().eq("id", id); if (error) throw error; },
+    mutationFn: (id: string) => adminDeleteTaxRate({ data: { id } }),
     onSuccess: () => { toast.success("Deleted"); qc.invalidateQueries({ queryKey: ["admin", "taxes"] }); },
   });
 

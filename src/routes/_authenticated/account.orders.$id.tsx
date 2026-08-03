@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { getMyOrder } from "@/integrations/mongodb/order.functions";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { formatMoney } from "@/lib/format";
@@ -50,15 +50,7 @@ function OrderDetail() {
   const { id } = Route.useParams();
   const { data: order, isLoading, error } = useQuery({
     queryKey: ["order", id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("orders")
-        .select("*, order_items(*)")
-        .eq("id", id)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => getMyOrder({ data: { id } }),
   });
 
   if (isLoading) {

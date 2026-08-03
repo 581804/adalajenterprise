@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { adminListDiscounts, adminCreateDiscount, adminUpdateDiscount, adminDeleteDiscount } from "@/integrations/mongodb/discount-admin.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,7 +21,7 @@ function AdminDiscounts() {
   const [open, setOpen] = useState(false);
   const { data } = useQuery({
     queryKey: ["admin", "discounts"],
-    queryFn: async () => (await supabase.from("discounts").select("*").order("created_at", { ascending: false })).data ?? [],
+    queryFn: () => adminListDiscounts(),
   });
   const save = useMutation({
     mutationFn: async (d: any) => {
@@ -36,14 +36,14 @@ function AdminDiscounts() {
         ends_at: d.ends_at ? new Date(d.ends_at).toISOString() : null,
         is_active: !!d.is_active,
       };
-      if (d.id) { const { error } = await supabase.from("discounts").update(payload).eq("id", d.id); if (error) throw error; }
-      else { const { error } = await supabase.from("discounts").insert(payload); if (error) throw error; }
+      if (d.id) await adminUpdateDiscount({ data: { ...payload, id: d.id } });
+      else await adminCreateDiscount({ data: payload });
     },
     onSuccess: () => { toast.success("Saved"); qc.invalidateQueries({ queryKey: ["admin", "discounts"] }); setOpen(false); },
     onError: (e: any) => toast.error(e.message),
   });
   const del = useMutation({
-    mutationFn: async (id: string) => { const { error } = await supabase.from("discounts").delete().eq("id", id); if (error) throw error; },
+    mutationFn: (id: string) => adminDeleteDiscount({ data: { id } }),
     onSuccess: () => { toast.success("Deleted"); qc.invalidateQueries({ queryKey: ["admin", "discounts"] }); },
   });
 

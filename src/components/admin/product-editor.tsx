@@ -1,7 +1,10 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { adminCreateProduct, adminUpdateProduct } from "@/integrations/mongodb/product.functions";
+import { adminListCategories } from "@/integrations/mongodb/category.functions";
+import { adminListTaxRates } from "@/integrations/mongodb/tax-rate.functions";
+import { adminListFeeCategories } from "@/integrations/mongodb/fee-category.functions";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,15 +15,6 @@ import { slugify } from "@/lib/format";
 import { Trash2, Upload, Plus } from "lucide-react";
 
 type Product = any;
-
-// Only columns that exist on `products` — never send joined relations back on update.
-const PRODUCT_COLUMNS = [
-  "slug", "title", "description", "short_description",
-  "price_cents", "compare_at_cents", "currency", "category_id",
-  "status", "images", "tags", "stock", "sku", "weight_grams",
-  "seo", "is_featured",
-  "tax_rate_id", "price_includes_tax", "fee_category_id",
-];
 
 // UI works in rupees (float). DB stores paise (integer).
 const toMinor = (rupees: any): number => {
@@ -58,19 +52,18 @@ export function ProductEditor({ initial, onSaved }: { initial: Product | null; o
       _price: toMajor(v.price_cents),
     })),
   );
-  const [uploading, setUploading] = useState(false);
 
   const { data: categories } = useQuery({
     queryKey: ["categories", "admin"],
-    queryFn: async () => (await supabase.from("categories").select("id, name").order("name")).data ?? [],
+    queryFn: () => adminListCategories(),
   });
   const { data: taxRates } = useQuery({
     queryKey: ["tax-rates", "admin"],
-    queryFn: async () => (await supabase.from("tax_rates").select("id, name, rate_percent").order("name")).data ?? [],
+    queryFn: () => adminListTaxRates(),
   });
   const { data: feeCategories } = useQuery({
     queryKey: ["fee-categories", "admin"],
-    queryFn: async () => (await supabase.from("fee_categories").select("id, name").order("name")).data ?? [],
+    queryFn: () => adminListFeeCategories(),
   });
 
   const upd = (k: string) => (e: any) => setP((prev: any) => ({ ...prev, [k]: e.target?.value ?? e }));
@@ -79,50 +72,42 @@ export function ProductEditor({ initial, onSaved }: { initial: Product | null; o
 
   const save = useMutation({
     mutationFn: async () => {
-      // Build payload from allowed columns only.
-      const raw: any = {
-        ...p,
+      const payload = {
+        slug: p.slug || slugify(p.title),
+        title: p.title,
+        description: p.description ?? "",
+        short_description: p.short_description ?? null,
         price_cents: toMinor(p._price),
         compare_at_cents: p._compare === "" || p._compare == null ? null : toMinor(p._compare),
-        stock: Number(p.stock) || 0,
-        tags: (p._tags ?? "")
-          .split(",")
-          .map((t: string) => t.trim())
-          .filter(Boolean),
-        slug: p.slug || slugify(p.title),
         currency: p.currency || "INR",
-      };
-      const payload: any = {};
-      for (const k of PRODUCT_COLUMNS) if (k in raw) payload[k] = raw[k];
-
-      let productId = initial?.id;
-      if (initial) {
-        const { error } = await supabase.from("products").update(payload).eq("id", initial.id);
-        if (error) throw error;
-      } else {
-        const { data, error } = await supabase.from("products").insert(payload).select().single();
-        if (error) throw error;
-        productId = data.id;
-      }
-      // sync variants
-      const existingIds = initial?.product_variants?.map((v: any) => v.id) ?? [];
-      const keptIds = variants.filter((v) => v.id).map((v) => v.id);
-      const toDelete = existingIds.filter((id: string) => !keptIds.includes(id));
-      if (toDelete.length) await supabase.from("product_variants").delete().in("id", toDelete);
-      for (const v of variants) {
-        const price = v._price === "" || v._price == null ? null : toMinor(v._price);
-        const vp: any = {
-          product_id: productId,
+        category_id: p.category_id ?? null,
+        status: p.status,
+        images: p.images ?? [],
+        tags: (p._tags ?? "").split(",").map((t: string) => t.trim()).filter(Boolean),
+        stock: Number(p.stock) || 0,
+        sku: p.sku ?? null,
+        seo: p.seo ?? {},
+        is_featured: !!p.is_featured,
+        tax_rate_id: p.tax_rate_id ?? null,
+        price_includes_tax: !!p.price_includes_tax,
+        fee_category_id: p.fee_category_id ?? null,
+        // Variants are embedded on the product document — sent as one array,
+        // no separate delete/insert pass needed the way the old
+        // product_variants table required.
+        variants: variants.map((v) => ({
+          id: v.id, // present on existing variants, absent on new ones
           name: v.name,
           sku: v.sku ?? null,
-          price_cents: price,
+          price_cents: v._price === "" || v._price == null ? null : toMinor(v._price),
           stock: Number(v.stock) || 0,
           option_values: v.option_values ?? {},
-        };
-        if (v.id) await supabase.from("product_variants").update(vp).eq("id", v.id);
-        else await supabase.from("product_variants").insert(vp);
-      }
-      return productId!;
+        })),
+      };
+
+      const saved = initial
+        ? await adminUpdateProduct({ data: { ...payload, id: initial.id } })
+        : await adminCreateProduct({ data: payload });
+      return saved.id;
     },
     onSuccess: (id) => {
       toast.success("Saved");
@@ -133,21 +118,14 @@ export function ProductEditor({ initial, onSaved }: { initial: Product | null; o
     onError: (e: any) => toast.error(e.message),
   });
 
-  const uploadImage = async (file: File) => {
-    setUploading(true);
-    try {
-      const path = `products/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
-      const { error } = await supabase.storage.from("store-media").upload(path, file);
-      if (error) throw error;
-      const { data: signed } = await supabase.storage.from("store-media").createSignedUrl(path, 60 * 60 * 24 * 365 * 10);
-      const url = signed?.signedUrl;
-      if (!url) throw new Error("Could not get URL");
-      setP((prev: any) => ({ ...prev, images: [...(prev.images ?? []), url] }));
-    } catch (e: any) {
-      toast.error(e.message);
-    } finally {
-      setUploading(false);
-    }
+  // Image uploads previously went through Supabase Storage, which has no
+  // direct MongoDB equivalent (MongoDB stores documents/data, not files).
+  // This is intentionally NOT silently faked — see the note below the
+  // upload button. Pasting an already-hosted image URL still works fully.
+  const addImageUrl = () => {
+    const url = prompt("Image URL (paste a link to an already-hosted image):");
+    if (!url) return;
+    setP((prev: any) => ({ ...prev, images: [...(prev.images ?? []), url] }));
   };
 
   return (
@@ -242,12 +220,19 @@ export function ProductEditor({ initial, onSaved }: { initial: Product | null; o
               ><Trash2 className="h-3 w-3" /></button>
             </div>
           ))}
-          <label className="aspect-square rounded border-2 border-dashed flex items-center justify-center cursor-pointer hover:bg-muted">
+          <button
+            type="button"
+            onClick={addImageUrl}
+            className="aspect-square rounded border-2 border-dashed flex items-center justify-center cursor-pointer hover:bg-muted"
+          >
             <Upload className="h-6 w-6 text-muted-foreground" />
-            <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && uploadImage(e.target.files[0])} />
-          </label>
+          </button>
         </div>
-        {uploading ? <p className="text-xs text-muted-foreground mt-1">Uploading…</p> : null}
+        <p className="text-xs text-muted-foreground mt-1">
+          Direct file upload isn't wired up yet (the previous version used Supabase Storage, which
+          this migration doesn't replace) — paste a URL to an already-hosted image for now, e.g. from
+          Cloudinary, S3, or another host.
+        </p>
       </div>
 
       <div className="space-y-3 border-t pt-6">

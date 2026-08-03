@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { adminListPages, adminCreatePage, adminUpdatePage, adminDeletePage } from "@/integrations/mongodb/page.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,19 +22,19 @@ function AdminPages() {
   const [open, setOpen] = useState(false);
   const { data } = useQuery({
     queryKey: ["admin", "pages"],
-    queryFn: async () => (await supabase.from("pages").select("*").order("updated_at", { ascending: false })).data ?? [],
+    queryFn: () => adminListPages(),
   });
   const save = useMutation({
     mutationFn: async (p: any) => {
       const payload = { ...p, slug: p.slug || slugify(p.title) };
-      if (p.id) { const { error } = await supabase.from("pages").update(payload).eq("id", p.id); if (error) throw error; }
-      else { const { error } = await supabase.from("pages").insert(payload); if (error) throw error; }
+      if (p.id) await adminUpdatePage({ data: payload });
+      else await adminCreatePage({ data: payload });
     },
     onSuccess: () => { toast.success("Saved"); qc.invalidateQueries({ queryKey: ["admin", "pages"] }); setOpen(false); },
     onError: (e: any) => toast.error(e.message),
   });
   const del = useMutation({
-    mutationFn: async (id: string) => { const { error } = await supabase.from("pages").delete().eq("id", id); if (error) throw error; },
+    mutationFn: (id: string) => adminDeletePage({ data: { id } }),
     onSuccess: () => { toast.success("Deleted"); qc.invalidateQueries({ queryKey: ["admin", "pages"] }); },
   });
 

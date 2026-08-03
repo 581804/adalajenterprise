@@ -1,36 +1,40 @@
-import { useEffect, useState } from "react";
-import type { Session, User } from "@supabase/supabase-js";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { useSession as useMongoSession } from "@/integrations/mongodb/use-session";
+import { getCurrentUser } from "@/integrations/mongodb/user.functions";
 
+/**
+ * Same exported shape as the original Supabase-backed hook: { session, user,
+ * loading }. `session` is no longer a rich Supabase Session object — nothing
+ * in this codebase actually reads it, only `user` and `loading`, so it's
+ * kept here only for shape-compatibility, not because it's meaningfully used.
+ */
 export function useSession() {
-  const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setLoading(false);
-    });
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
-    return () => sub.subscription.unsubscribe();
-  }, []);
-  return { session, user: session?.user ?? null, loading };
+  const { claims, isAuthenticated } = useMongoSession();
+  return {
+    session: isAuthenticated ? { user: claims } : null,
+    user: isAuthenticated && claims ? { id: claims.sub, email: claims.email } : null,
+    loading: false, // reading localStorage is synchronous — no loading state needed
+  };
 }
 
-export function useIsAdmin(user: User | null | undefined) {
+/**
+ * Re-verifies admin status against the live DB on every call (not just the
+ * JWT's cached role claim), so a role change since sign-in takes effect
+ * immediately — matches the original's live `user_roles` table lookup.
+ */
+export function useIsAdmin(user: { id: string } | null | undefined) {
   return useQuery({
     queryKey: ["is_admin", user?.id ?? null],
     queryFn: async () => {
       if (!user) return false;
-      const { data, error } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id)
-        .eq("role", "admin")
-        .maybeSingle();
-      if (error) return false;
-      return !!data;
+      try {
+        const profile = await getCurrentUser();
+        return profile.role === "admin";
+      } catch {
+        return false;
+      }
     },
+    enabled: !!user,
     staleTime: 30_000,
   });
 }
