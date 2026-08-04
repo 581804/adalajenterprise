@@ -1,6 +1,7 @@
 // Server-only. Do not import from route files or client components.
 import mongoose, { Schema, type InferSchemaType, type Model } from "mongoose";
 import { randomBytes } from "node:crypto";
+import { DEFAULT_CURRENCY } from "@/lib/format";
 
 export const ORDER_STATUSES = [
   "pending",
@@ -26,6 +27,18 @@ const orderItemSchema = new Schema(
     unitPriceCents: { type: Number, required: true, min: 0 },
     quantity: { type: Number, required: true, min: 1 },
     imageUrl: { type: String },
+    // Per-line snapshot of tax/fee attributable to this item, for an
+    // itemized Amazon/Flipkart-style breakdown. Optional (not `required`)
+    // because orders created before this field existed won't have it —
+    // the UI shows the aggregate-only view for those, full per-line detail
+    // for orders going forward. Never recomputed after the fact; frozen at
+    // purchase time exactly like unitPriceCents/title above.
+    lineSubtotalCents: { type: Number },
+    taxRateName: { type: String },
+    taxRatePercent: { type: Number },
+    taxCents: { type: Number },
+    feeName: { type: String },
+    feeCents: { type: Number },
   },
   { timestamps: { createdAt: true, updatedAt: false } },
 );
@@ -51,7 +64,7 @@ const orderSchema = new Schema(
     discountCents: { type: Number, required: true, default: 0 },
     feeCents: { type: Number, required: true, default: 0 },
     totalCents: { type: Number, required: true, default: 0 },
-    currency: { type: String, required: true, default: "USD" },
+    currency: { type: String, required: true, default: DEFAULT_CURRENCY },
     shippingAddress: { type: Schema.Types.Mixed, default: {} },
     billingAddress: { type: Schema.Types.Mixed, default: {} },
     discountCode: { type: String },

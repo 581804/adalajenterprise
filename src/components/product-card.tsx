@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { formatMoney } from "@/lib/format";
+import { formatMoney, DEFAULT_CURRENCY } from "@/lib/format";
 
 type P = {
   product: {
@@ -14,7 +14,7 @@ type P = {
   currency?: string;
 };
 
-export function ProductCard({ product, currency = "USD" }: P) {
+export function ProductCard({ product, currency = DEFAULT_CURRENCY }: P) {
   const img = Array.isArray(product.images) && product.images.length > 0 ? product.images[0] : null;
   return (
     <Link to="/product/$slug" params={{ slug: product.slug }} className="group block">

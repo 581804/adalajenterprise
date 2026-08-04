@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireAdmin } from "./auth-middleware";
+import { DEFAULT_CURRENCY } from "@/lib/format";
 
 function serializeVariant(v: any) {
   return {
@@ -206,7 +207,7 @@ const productInput = z.object({
   variants: z.array(variantInput).optional(),
 });
 
-function toProductDoc(data: z.infer<typeof productInput>) {
+function toProductDoc(data: z.infer<typeof productInput>, fallbackCurrency: string) {
   return {
     slug: data.slug,
     title: data.title,
@@ -214,7 +215,7 @@ function toProductDoc(data: z.infer<typeof productInput>) {
     shortDescription: data.short_description ?? undefined,
     priceCents: data.price_cents,
     compareAtCents: data.compare_at_cents ?? undefined,
-    currency: data.currency ?? "USD",
+    currency: data.currency ?? fallbackCurrency,
     categoryId: data.category_id || null,
     status: data.status ?? "draft",
     images: data.images ?? [],
@@ -246,8 +247,10 @@ export const adminCreateProduct = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { connectMongo } = await import("./client.server");
     const { Product } = await import("./models/product.server");
+    const { getOrCreateSiteSettings } = await import("./models/site-settings.server");
     await connectMongo();
-    const created = await Product.create(toProductDoc(data));
+    const settings = await getOrCreateSiteSettings();
+    const created = await Product.create(toProductDoc(data, settings.currency || DEFAULT_CURRENCY));
     return serializeProduct(created, { includeVariants: true });
   });
 
@@ -257,9 +260,11 @@ export const adminUpdateProduct = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { connectMongo } = await import("./client.server");
     const { Product } = await import("./models/product.server");
+    const { getOrCreateSiteSettings } = await import("./models/site-settings.server");
     await connectMongo();
+    const settings = await getOrCreateSiteSettings();
     const { id, ...rest } = data;
-    const updated = await Product.findByIdAndUpdate(id, toProductDoc(rest), { new: true });
+    const updated = await Product.findByIdAndUpdate(id, toProductDoc(rest, settings.currency || DEFAULT_CURRENCY), { new: true });
     if (!updated) throw new Error("Product not found");
     return serializeProduct(updated, { includeVariants: true });
   });

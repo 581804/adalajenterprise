@@ -1,4 +1,5 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
+import { DEFAULT_CURRENCY } from "@/lib/format";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -45,7 +46,7 @@ function ProductPage() {
   const variant = product.product_variants?.find((v: any) => v.id === selectedVariant);
   const price = variant?.price_cents ?? product.price_cents;
   const stock = variant ? variant.stock : product.stock;
-  const currency = product.currency ?? settings?.currency ?? "USD";
+  const currency = product.currency ?? settings?.currency ?? DEFAULT_CURRENCY;
   const heroImg: any = images[selectedImage];
 
   const handleAdd = () => {

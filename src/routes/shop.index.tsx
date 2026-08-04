@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { DEFAULT_CURRENCY } from "@/lib/format";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { listProducts } from "@/integrations/mongodb/product.functions";
@@ -80,7 +81,7 @@ function ShopIndex() {
         ) : products && products.length > 0 ? (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {products.map((p) => (
-              <ProductCard key={p.id} product={p} currency={settings?.currency ?? "USD"} />
+              <ProductCard key={p.id} product={p} currency={settings?.currency ?? DEFAULT_CURRENCY} />
             ))}
           </div>
         ) : (

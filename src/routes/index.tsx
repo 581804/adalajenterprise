@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { DEFAULT_CURRENCY } from "@/lib/format";
 import { useQuery } from "@tanstack/react-query";
 import { listProducts } from "@/integrations/mongodb/product.functions";
 import { listActiveCategories } from "@/integrations/mongodb/category.functions";
@@ -95,7 +96,7 @@ function HomePage() {
           {showFeatured && showFeatured.length > 0 ? (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
               {showFeatured.map((p: any) => (
-                <ProductCard key={p.id} product={p} currency={settings?.currency ?? "USD"} />
+                <ProductCard key={p.id} product={p} currency={settings?.currency ?? DEFAULT_CURRENCY} />
               ))}
             </div>
           ) : (

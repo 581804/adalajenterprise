@@ -17,6 +17,7 @@ import { z } from "zod";
 import { requireAuth, requireAdmin } from "./auth-middleware";
 import { ORDER_STATUSES } from "./models/order.server";
 import { previewDiscount, redeemDiscount } from "./discount-logic.server";
+import { DEFAULT_CURRENCY } from "@/lib/format";
 
 function serializeOrder(o: any) {
   return {
@@ -54,6 +55,14 @@ function serializeOrder(o: any) {
       unit_price_cents: it.unitPriceCents,
       quantity: it.quantity,
       image_url: it.imageUrl ?? null,
+      // Present only on orders placed after this field was added — null on
+      // older orders, which the UI handles by falling back to aggregate-only display.
+      line_subtotal_cents: it.lineSubtotalCents ?? null,
+      tax_rate_name: it.taxRateName ?? null,
+      tax_rate_percent: it.taxRatePercent ?? null,
+      tax_cents: it.taxCents ?? null,
+      fee_name: it.feeName ?? null,
+      fee_cents: it.feeCents ?? null,
     })),
   };
 }
@@ -115,6 +124,13 @@ export const createOrder = createServerFn({ method: "POST" })
       taxRateId: string | null;
       priceIncludesTax: boolean;
       feeCategoryId: string | null;
+      // Populated below, in the tax/fee calculation loop — not known yet
+      // when the line item is first built from the cart + product lookup.
+      taxRateName?: string;
+      taxRatePercent?: number;
+      lineTaxCents?: number;
+      feeName?: string;
+      lineFeeCents?: number;
     };
 
     const lineItems: LineItem[] = [];
@@ -171,8 +187,15 @@ export const createOrder = createServerFn({ method: "POST" })
       const taxRate = li.taxRateId ? taxRateById.get(li.taxRateId) : null;
       const taxPct = taxRate?.ratePercent ?? 0;
 
+      if (taxRate) {
+        li.taxRateName = taxRate.name;
+        li.taxRatePercent = taxRate.ratePercent;
+      }
+
       if (taxPct > 0 && !li.priceIncludesTax) {
-        taxExclusive += Math.round(lineSubtotal * (taxPct / 100));
+        const lineTax = Math.round(lineSubtotal * (taxPct / 100));
+        li.lineTaxCents = lineTax;
+        taxExclusive += lineTax;
       }
       // tax-inclusive amounts are informational only in the original (not
       // added on top), so intentionally not accumulated into a charge here.
@@ -181,13 +204,23 @@ export const createOrder = createServerFn({ method: "POST" })
       if (fee) {
         if (fee.scope === "per_unit") {
           const feeAmt = (fee.amountCents ?? 0) * li.quantity + Math.round((lineSubtotal * (fee.percent ?? 0)) / 100);
+          li.feeName = fee.name;
+          li.lineFeeCents = feeAmt;
           feeTotal += feeAmt;
           if (fee.taxable && taxPct > 0 && !li.priceIncludesTax) {
-            feeTaxExclusive += Math.round((feeAmt * taxPct) / 100);
+            const feeTax = Math.round((feeAmt * taxPct) / 100);
+            feeTaxExclusive += feeTax;
+            // Fee tax is folded into the line's tax total too, so the
+            // per-line "tax" figure shown to the customer matches what the
+            // order-level aggregate actually charged for this line.
+            li.lineTaxCents = (li.lineTaxCents ?? 0) + feeTax;
           }
         } else if (!perOrderFees.has(fee._id.toString())) {
           perOrderFees.set(fee._id.toString(), fee);
         }
+        // Per-order fees (scope !== "per_unit") are intentionally NOT
+        // attributed to any single line — they're a whole-order charge,
+        // shown separately in the order-level summary, same as before.
       }
     }
     for (const fee of perOrderFees.values()) {
@@ -231,6 +264,19 @@ export const createOrder = createServerFn({ method: "POST" })
       await redeemDiscount(data.discountCode, subtotalCents);
     }
 
+    // Currency is derived from the actual products purchased, not left to
+    // fall through to a schema default (that silent fallthrough — landing
+    // on the Order model's default rather than an explicit value — was the
+    // actual root cause of orders showing USD regardless of store settings).
+    // This store is single-currency in practice; if a cart somehow mixed
+    // currencies, that's a real data problem worth surfacing loudly rather
+    // than silently charging in whichever currency happened to be first.
+    const orderCurrencies = new Set(lineItems.map((li) => productById.get(li.productId)?.currency).filter(Boolean));
+    if (orderCurrencies.size > 1) {
+      throw new Error("Cart contains items in different currencies — please contact support");
+    }
+    const orderCurrency = [...orderCurrencies][0] ?? DEFAULT_CURRENCY;
+
     const order = await Order.create({
       userId: context.userId,
       email: data.email,
@@ -241,6 +287,7 @@ export const createOrder = createServerFn({ method: "POST" })
       discountCents,
       feeCents: feeTotal,
       totalCents,
+      currency: orderCurrency,
       shippingAddress: data.shippingAddress,
       billingAddress: data.billingAddress ?? data.shippingAddress,
       discountCode: redeemedDiscountCode,
@@ -254,6 +301,12 @@ export const createOrder = createServerFn({ method: "POST" })
         unitPriceCents: li.unitPriceCents,
         quantity: li.quantity,
         imageUrl: li.imageUrl,
+        lineSubtotalCents: li.unitPriceCents * li.quantity,
+        taxRateName: li.taxRateName,
+        taxRatePercent: li.taxRatePercent,
+        taxCents: li.lineTaxCents,
+        feeName: li.feeName,
+        feeCents: li.lineFeeCents,
       })),
     });
 

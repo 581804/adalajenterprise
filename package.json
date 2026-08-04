@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "db:init": "tsx scripts/init-db.ts"
+    "db:init": "tsx scripts/init-db.ts",
+    "db:fix-currency": "tsx scripts/fix-currency.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

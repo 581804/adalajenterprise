@@ -21,6 +21,8 @@ type InvoiceOrder = {
     variant_name?: string | null;
     unit_price_cents: number;
     quantity: number;
+    tax_cents?: number | null;
+    tax_rate_percent?: number | null;
   }>;
 };
 
@@ -90,16 +92,29 @@ export function downloadInvoice(order: InvoiceOrder, brand: InvoiceBrand = {}) {
   }
   y += 6 + maxLines * 5 + 8;
 
-  // Line items table
+  // Line items table — includes a per-line Tax column when the order has
+  // that data (orders placed after per-line tax tracking was added); shows
+  // "—" for older orders where only the order-level aggregate exists.
+  const hasLineTax = order.order_items.some((item) => item.tax_cents != null);
   autoTable(doc, {
     startY: y,
-    head: [["Item", "Qty", "Unit price", "Line total"]],
-    body: order.order_items.map((item) => [
-      item.variant_name ? `${item.title} (${item.variant_name})` : item.title,
-      String(item.quantity),
-      money(item.unit_price_cents, currency),
-      money(item.unit_price_cents * item.quantity, currency),
-    ]),
+    head: hasLineTax
+      ? [["Item", "Qty", "Unit price", "Tax", "Line total"]]
+      : [["Item", "Qty", "Unit price", "Line total"]],
+    body: order.order_items.map((item) => {
+      const label = item.variant_name ? `${item.title} (${item.variant_name})` : item.title;
+      const lineTotal = money(item.unit_price_cents * item.quantity, currency);
+      const row = [label, String(item.quantity), money(item.unit_price_cents, currency)];
+      if (hasLineTax) {
+        row.push(
+          item.tax_cents != null
+            ? `${money(item.tax_cents, currency)}${item.tax_rate_percent ? ` (${item.tax_rate_percent}%)` : ""}`
+            : "—",
+        );
+      }
+      row.push(lineTotal);
+      return row;
+    }),
     theme: "striped",
     headStyles: { fillColor: [30, 30, 30] },
     styles: { fontSize: 9 },

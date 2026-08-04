@@ -216,8 +216,23 @@ function OrderDetail() {
                   <div className="font-medium">{i.title}</div>
                   {i.variant_name ? <div className="text-xs text-muted-foreground">{i.variant_name}</div> : null}
                   <div className="text-xs text-muted-foreground">Qty {i.quantity} · {formatMoney(i.unit_price_cents, order.currency)} each</div>
+                  {i.tax_cents != null || i.fee_cents != null ? (
+                    <div className="text-xs text-muted-foreground mt-1 space-x-3">
+                      {i.tax_cents != null ? (
+                        <span>{i.tax_rate_name ? `${i.tax_rate_name} (${i.tax_rate_percent}%)` : "Tax"}: {formatMoney(i.tax_cents, order.currency)}</span>
+                      ) : null}
+                      {i.fee_cents != null ? <span>{i.fee_name ?? "Fee"}: {formatMoney(i.fee_cents, order.currency)}</span> : null}
+                    </div>
+                  ) : null}
                 </div>
-                <div className="font-medium">{formatMoney(i.unit_price_cents * i.quantity, order.currency)}</div>
+                <div className="text-right">
+                  <div className="font-medium">{formatMoney(i.unit_price_cents * i.quantity, order.currency)}</div>
+                  {i.line_subtotal_cents != null && (i.tax_cents || i.fee_cents) ? (
+                    <div className="text-xs text-muted-foreground">
+                      + {formatMoney((i.tax_cents ?? 0) + (i.fee_cents ?? 0), order.currency)} tax & fees
+                    </div>
+                  ) : null}
+                </div>
               </div>
             ))}
           </div>
@@ -226,13 +241,13 @@ function OrderDetail() {
         {/* Totals + addresses */}
         <div className="grid md:grid-cols-3 gap-6">
           <section className="border rounded-lg p-6 space-y-1 text-sm">
-            <h2 className="font-semibold mb-2">Summary</h2>
-            <div className="flex justify-between"><span>Subtotal</span><span>{formatMoney(order.subtotal_cents, order.currency)}</span></div>
-            <div className="flex justify-between"><span>Shipping{order.shipping_method ? ` (${order.shipping_method})` : ""}</span><span>{formatMoney(order.shipping_cents, order.currency)}</span></div>
-            {order.fee_cents > 0 ? <div className="flex justify-between"><span>Fees</span><span>{formatMoney(order.fee_cents, order.currency)}</span></div> : null}
+            <h2 className="font-semibold mb-2">Price details</h2>
+            <div className="flex justify-between"><span>Item total ({order.order_items?.length ?? 0} item{order.order_items?.length === 1 ? "" : "s"})</span><span>{formatMoney(order.subtotal_cents, order.currency)}</span></div>
+            {order.discount_cents > 0 ? <div className="flex justify-between text-primary"><span>Discount{order.discount_code ? ` (${order.discount_code})` : ""}</span><span>−{formatMoney(order.discount_cents, order.currency)}</span></div> : null}
+            <div className="flex justify-between"><span>Delivery charges{order.shipping_method ? ` (${order.shipping_method})` : ""}</span><span>{order.shipping_cents === 0 ? "FREE" : formatMoney(order.shipping_cents, order.currency)}</span></div>
+            {order.fee_cents > 0 ? <div className="flex justify-between"><span>Other charges</span><span>{formatMoney(order.fee_cents, order.currency)}</span></div> : null}
             {order.tax_cents > 0 ? <div className="flex justify-between"><span>Tax</span><span>{formatMoney(order.tax_cents, order.currency)}</span></div> : null}
-            {order.discount_cents > 0 ? <div className="flex justify-between"><span>Discount{order.discount_code ? ` (${order.discount_code})` : ""}</span><span>−{formatMoney(order.discount_cents, order.currency)}</span></div> : null}
-            <div className="flex justify-between font-bold pt-2 border-t"><span>Total</span><span>{formatMoney(order.total_cents, order.currency)}</span></div>
+            <div className="flex justify-between font-bold pt-2 border-t text-base"><span>Total amount</span><span>{formatMoney(order.total_cents, order.currency)}</span></div>
           </section>
           <section className="border rounded-lg p-6 text-sm">
             <h2 className="font-semibold mb-2">Shipping address</h2>

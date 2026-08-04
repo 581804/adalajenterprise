@@ -1,5 +1,6 @@
 // Server-only. Do not import from route files or client components.
 import mongoose, { Schema, type InferSchemaType, type Model } from "mongoose";
+import { DEFAULT_CURRENCY } from "@/lib/format";
 
 export const PRODUCT_STATUSES = ["draft", "active", "archived"] as const;
 export type ProductStatus = (typeof PRODUCT_STATUSES)[number];
@@ -28,7 +29,7 @@ const productSchema = new Schema(
     shortDescription: { type: String },
     priceCents: { type: Number, required: true, default: 0, min: 0 },
     compareAtCents: { type: Number, min: 0 },
-    currency: { type: String, required: true, default: "USD" },
+    currency: { type: String, required: true, default: DEFAULT_CURRENCY },
     categoryId: { type: Schema.Types.ObjectId, ref: "Category", index: true },
     status: { type: String, enum: PRODUCT_STATUSES, required: true, default: "draft", index: true },
     images: { type: [String], default: [] },

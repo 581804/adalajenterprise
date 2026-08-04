@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { DEFAULT_CURRENCY } from "@/lib/format";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { useCart } from "@/components/cart-provider";
@@ -14,7 +15,7 @@ export const Route = createFileRoute("/cart")({
 function CartPage() {
   const { items, setQty, remove, subtotal } = useCart();
   const { data: settings } = useSiteSettingsOptional();
-  const currency = settings?.currency ?? "USD";
+  const currency = settings?.currency ?? DEFAULT_CURRENCY;
 
   return (
     <div className="min-h-screen flex flex-col">
