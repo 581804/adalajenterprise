@@ -33,7 +33,16 @@ type InvoiceBrand = {
 };
 
 function money(cents: number, currency: string) {
-  return new Intl.NumberFormat(undefined, { style: "currency", currency: currency || "INR" }).format((cents ?? 0) / 100);
+  // Deliberately NOT using Intl.NumberFormat's currency symbol here.
+  // jsPDF's default fonts (the old PDF standard-14 set) have no glyph for
+  // ₹ or most non-Latin1 currency symbols — the character is silently
+  // dropped rather than erroring, which is what produced the broken
+  // rendering seen in testing. Using the plain currency CODE ("INR", "USD",
+  // etc.) instead is guaranteed ASCII and renders correctly in any font.
+  // Verified by rasterizing actual jsPDF output before shipping this fix.
+  const value = (cents ?? 0) / 100;
+  const formatted = value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return `${currency || "INR"} ${formatted}`;
 }
 
 function formatAddress(addr?: Record<string, any>) {
@@ -59,25 +68,32 @@ export function downloadInvoice(order: InvoiceOrder, brand: InvoiceBrand = {}) {
   const currency = order.currency || "INR";
   const pageWidth = doc.internal.pageSize.getWidth();
 
-  // Header
+  // Header band
+  doc.setFillColor(23, 37, 32); // dark green, matches this store's branding direction
+  doc.rect(0, 0, pageWidth, 34, "F");
+  doc.setTextColor(255, 255, 255);
   doc.setFontSize(18);
-  doc.text(brand.brand_name || "Invoice", 14, 20);
-  doc.setFontSize(10);
-  doc.setTextColor(100);
-  if (brand.contact_email) doc.text(brand.contact_email, 14, 26);
-  if (brand.contact_phone) doc.text(brand.contact_phone, 14, 31);
+  doc.setFont("helvetica", "bold");
+  doc.text(brand.brand_name || "Invoice", 14, 16);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  const contactLine = [brand.contact_email, brand.contact_phone].filter(Boolean).join("  ·  ");
+  if (contactLine) doc.text(contactLine, 14, 24);
+
+  doc.setFontSize(11);
+  doc.setFont("helvetica", "bold");
+  doc.text(`INVOICE`, pageWidth - 14, 15, { align: "right" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.text(`#${order.order_number}`, pageWidth - 14, 21, { align: "right" });
+  doc.text(new Date(order.created_at).toLocaleDateString(undefined, { dateStyle: "medium" }), pageWidth - 14, 27, { align: "right" });
 
   doc.setTextColor(0);
-  doc.setFontSize(11);
-  doc.text(`Invoice for Order ${order.order_number}`, pageWidth - 14, 20, { align: "right" });
   doc.setFontSize(9);
-  doc.setTextColor(100);
-  doc.text(new Date(order.created_at).toLocaleDateString(undefined, { dateStyle: "long" }), pageWidth - 14, 26, { align: "right" });
-  doc.text(order.email, pageWidth - 14, 31, { align: "right" });
+  doc.text(order.email, pageWidth - 14, 40, { align: "right" });
 
   // Addresses
-  let y = 42;
-  doc.setTextColor(0);
+  let y = 48;
   doc.setFontSize(10);
   doc.setFont("helvetica", "bold");
   doc.text("Billing address", 14, y);
@@ -116,22 +132,23 @@ export function downloadInvoice(order: InvoiceOrder, brand: InvoiceBrand = {}) {
       return row;
     }),
     theme: "striped",
-    headStyles: { fillColor: [30, 30, 30] },
+    headStyles: { fillColor: [23, 37, 32] },
     styles: { fontSize: 9 },
   });
 
   // Totals — right-aligned block after the table
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const afterTableY = (doc as any).lastAutoTable.finalY + 10;
-  const totalsX = pageWidth - 14;
+  const afterTableY = (doc as any).lastAutoTable.finalY + 8;
+  const totalsX = pageWidth - 18;
   const labelX = totalsX - 55;
   let ty = afterTableY;
-  const row = (label: string, value: string, bold = false) => {
-    doc.setFont("helvetica", bold ? "bold" : "normal");
-    doc.setFontSize(bold ? 11 : 9.5);
+  const row = (label: string, value: string) => {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9.5);
+    doc.setTextColor(60);
     doc.text(label, labelX, ty);
     doc.text(value, totalsX, ty, { align: "right" });
-    ty += bold ? 7 : 6;
+    ty += 6;
   };
 
   row("Subtotal", money(order.subtotal_cents, currency));
@@ -141,9 +158,18 @@ export function downloadInvoice(order: InvoiceOrder, brand: InvoiceBrand = {}) {
   if (order.discount_cents > 0) {
     row(order.discount_code ? `Discount (${order.discount_code})` : "Discount", `-${money(order.discount_cents, currency)}`);
   }
-  doc.setDrawColor(200);
-  doc.line(labelX, ty - 3, totalsX, ty - 3);
-  row("Total", money(order.total_cents, currency), true);
+
+  // Highlighted total row — filled background, not just a rule, so it
+  // actually stands out the way a "richer" invoice's total block should.
+  ty += 2;
+  doc.setFillColor(23, 37, 32);
+  doc.rect(labelX - 4, ty - 5, totalsX - labelX + 4 + 4, 9, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.text("Total", labelX, ty);
+  doc.text(money(order.total_cents, currency), totalsX, ty, { align: "right" });
+  ty += 14;
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
