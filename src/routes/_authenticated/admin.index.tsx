@@ -28,7 +28,7 @@ function AdminDashboard() {
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Dashboard</h1>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Stat label="Revenue" value={formatMoney(totalRevenue)} />
+        <Stat label="Revenue" value={formatMoney(totalRevenue, orders?.[0]?.currency)} />
         <Stat label="Orders" value={String(orders?.length ?? 0)} />
         <Stat label="Products" value={String(products?.length ?? 0)} />
         <Stat label="Customers" value={String(customers?.length ?? 0)} />

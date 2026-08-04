@@ -54,6 +54,8 @@
     "google-auth-library": "^10.9.1",
     "input-otp": "^1.4.2",
     "jsonwebtoken": "^9.0.3",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
     "lucide-react": "^0.575.0",
     "mongoose": "^9.8.1",
     "react": "^19.2.0",

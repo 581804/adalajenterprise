@@ -4,8 +4,10 @@ import { getMyOrder } from "@/integrations/mongodb/order.functions";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { formatMoney } from "@/lib/format";
+import { downloadInvoice } from "@/lib/invoice";
+import { useSiteSettingsOptional } from "@/hooks/use-site-settings";
 import { Button } from "@/components/ui/button";
-import { Check, Package, Truck, Home, Clock, X, Loader2, ArrowLeft, Copy } from "lucide-react";
+import { Check, Package, Truck, Home, Clock, X, Loader2, ArrowLeft, Copy, FileDown } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/account/orders/$id")({
@@ -48,6 +50,7 @@ function fmtDate(v: any) {
 
 function OrderDetail() {
   const { id } = Route.useParams();
+  const { data: settings } = useSiteSettingsOptional();
   const { data: order, isLoading, error } = useQuery({
     queryKey: ["order", id],
     queryFn: () => getMyOrder({ data: { id } }),
@@ -89,6 +92,14 @@ function OrderDetail() {
     toast.success("Tracking number copied");
   };
 
+  const handleDownloadInvoice = () => {
+    try {
+      downloadInvoice(order as any, { brand_name: settings?.brand_name, contact_email: settings?.contact_email, contact_phone: settings?.contact_phone });
+    } catch (e: any) {
+      toast.error("Couldn't generate invoice: " + (e?.message ?? "unknown error"));
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col">
       <SiteHeader />
@@ -99,7 +110,12 @@ function OrderDetail() {
           </Link>
           <div className="mt-2 flex flex-wrap items-baseline justify-between gap-2">
             <h1 className="text-2xl font-bold">Order {order.order_number}</h1>
-            <div className="text-sm text-muted-foreground">Placed {fmtDate(order.created_at)}</div>
+            <div className="flex items-center gap-3">
+              <div className="text-sm text-muted-foreground">Placed {fmtDate(order.created_at)}</div>
+              <Button variant="outline" size="sm" onClick={handleDownloadInvoice}>
+                <FileDown className="h-4 w-4 mr-1" /> Download invoice
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -207,17 +223,16 @@ function OrderDetail() {
           </div>
         </section>
 
-        {/* Totals + address */}
-        <div className="grid md:grid-cols-2 gap-6">
+        {/* Totals + addresses */}
+        <div className="grid md:grid-cols-3 gap-6">
           <section className="border rounded-lg p-6 space-y-1 text-sm">
             <h2 className="font-semibold mb-2">Summary</h2>
             <div className="flex justify-between"><span>Subtotal</span><span>{formatMoney(order.subtotal_cents, order.currency)}</span></div>
             <div className="flex justify-between"><span>Shipping{order.shipping_method ? ` (${order.shipping_method})` : ""}</span><span>{formatMoney(order.shipping_cents, order.currency)}</span></div>
             {order.fee_cents > 0 ? <div className="flex justify-between"><span>Fees</span><span>{formatMoney(order.fee_cents, order.currency)}</span></div> : null}
             {order.tax_cents > 0 ? <div className="flex justify-between"><span>Tax</span><span>{formatMoney(order.tax_cents, order.currency)}</span></div> : null}
-            {order.discount_cents > 0 ? <div className="flex justify-between"><span>Discount</span><span>−{formatMoney(order.discount_cents, order.currency)}</span></div> : null}
+            {order.discount_cents > 0 ? <div className="flex justify-between"><span>Discount{order.discount_code ? ` (${order.discount_code})` : ""}</span><span>−{formatMoney(order.discount_cents, order.currency)}</span></div> : null}
             <div className="flex justify-between font-bold pt-2 border-t"><span>Total</span><span>{formatMoney(order.total_cents, order.currency)}</span></div>
-            {(order as any).payment_status ? <div className="pt-2 text-xs text-muted-foreground">Payment: <span className="capitalize">{(order as any).payment_status}</span></div> : null}
           </section>
           <section className="border rounded-lg p-6 text-sm">
             <h2 className="font-semibold mb-2">Shipping address</h2>
@@ -227,6 +242,22 @@ function OrderDetail() {
             <div>{[addr.city, addr.region, addr.postal_code].filter(Boolean).join(", ")}</div>
             <div>{addr.country}</div>
             {addr.phone ? <div className="mt-1 text-muted-foreground">{addr.phone}</div> : null}
+          </section>
+          <section className="border rounded-lg p-6 text-sm">
+            <h2 className="font-semibold mb-2">Billing address</h2>
+            {(() => {
+              const billAddr = (order.billing_address ?? order.shipping_address ?? {}) as any;
+              return (
+                <>
+                  <div>{billAddr.full_name}</div>
+                  <div>{billAddr.line1}</div>
+                  {billAddr.line2 ? <div>{billAddr.line2}</div> : null}
+                  <div>{[billAddr.city, billAddr.region, billAddr.postal_code].filter(Boolean).join(", ")}</div>
+                  <div>{billAddr.country}</div>
+                  {billAddr.phone ? <div className="mt-1 text-muted-foreground">{billAddr.phone}</div> : null}
+                </>
+              );
+            })()}
           </section>
         </div>
       </main>

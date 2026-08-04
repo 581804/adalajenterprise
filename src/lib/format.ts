@@ -1,4 +1,4 @@
-export function formatMoney(cents: number, currency = "USD", symbol = "$") {
+export function formatMoney(cents: number, currency = "INR", symbol = "₹") {
   const value = (cents ?? 0) / 100;
   try {
     return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(value);

@@ -3,6 +3,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { adminListOrders, adminUpdateOrder } from "@/integrations/mongodb/order.functions";
 import { formatMoney } from "@/lib/format";
+import { downloadInvoice } from "@/lib/invoice";
+import { useSiteSettingsOptional } from "@/hooks/use-site-settings";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -10,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { FileDown } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin/orders")({
   component: AdminOrders,
@@ -68,6 +71,14 @@ function AdminOrders() {
 }
 
 function OrderDetail({ order, onSave }: { order: any; onSave: (patch: any) => void }) {
+  const { data: settings } = useSiteSettingsOptional();
+  const handleDownloadInvoice = () => {
+    try {
+      downloadInvoice(order, { brand_name: settings?.brand_name, contact_email: settings?.contact_email, contact_phone: settings?.contact_phone });
+    } catch (e: any) {
+      toast.error("Couldn't generate invoice: " + (e?.message ?? "unknown error"));
+    }
+  };
   const [ship, setShip] = useState({
     carrier: order.carrier ?? "",
     tracking_number: order.tracking_number ?? "",
@@ -85,7 +96,12 @@ function OrderDetail({ order, onSave }: { order: any; onSave: (patch: any) => vo
 
   return (
     <div className="space-y-4 text-sm">
-      <div><strong>Customer:</strong> {order.email}</div>
+      <div className="flex justify-between items-center">
+        <div><strong>Customer:</strong> {order.email}</div>
+        <Button variant="outline" size="sm" onClick={handleDownloadInvoice}>
+          <FileDown className="h-4 w-4 mr-1" /> Download invoice
+        </Button>
+      </div>
       <div>
         <strong>Shipping address:</strong>
         <pre className="mt-1 bg-muted p-2 rounded text-xs whitespace-pre-wrap">{JSON.stringify(order.shipping_address, null, 2)}</pre>
