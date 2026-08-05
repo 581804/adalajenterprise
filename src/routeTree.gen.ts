@@ -30,6 +30,7 @@ import { Route as AuthenticatedAdminDiscountsRouteImport } from './routes/_authe
 import { Route as AuthenticatedAdminFeesRouteImport } from './routes/_authenticated/admin.fees'
 import { Route as AuthenticatedAdminOrdersRouteImport } from './routes/_authenticated/admin.orders'
 import { Route as AuthenticatedAdminPagesRouteImport } from './routes/_authenticated/admin.pages'
+import { Route as AuthenticatedAdminPincodesRouteImport } from './routes/_authenticated/admin.pincodes'
 import { Route as AuthenticatedAdminSettingsRouteImport } from './routes/_authenticated/admin.settings'
 import { Route as AuthenticatedAdminShippingRouteImport } from './routes/_authenticated/admin.shipping'
 import { Route as AuthenticatedAdminTaxesRouteImport } from './routes/_authenticated/admin.taxes'
@@ -148,6 +149,12 @@ const AuthenticatedAdminPagesRoute = AuthenticatedAdminPagesRouteImport.update({
   path: '/pages',
   getParentRoute: () => AuthenticatedAdminRoute,
 } as any)
+const AuthenticatedAdminPincodesRoute =
+  AuthenticatedAdminPincodesRouteImport.update({
+    id: '/pincodes',
+    path: '/pincodes',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 const AuthenticatedAdminSettingsRoute =
   AuthenticatedAdminSettingsRouteImport.update({
     id: '/settings',
@@ -209,6 +216,7 @@ export interface FileRoutesByFullPath {
   '/admin/fees': typeof AuthenticatedAdminFeesRoute
   '/admin/orders': typeof AuthenticatedAdminOrdersRoute
   '/admin/pages': typeof AuthenticatedAdminPagesRoute
+  '/admin/pincodes': typeof AuthenticatedAdminPincodesRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/admin/shipping': typeof AuthenticatedAdminShippingRoute
   '/admin/taxes': typeof AuthenticatedAdminTaxesRoute
@@ -235,6 +243,7 @@ export interface FileRoutesByTo {
   '/admin/fees': typeof AuthenticatedAdminFeesRoute
   '/admin/orders': typeof AuthenticatedAdminOrdersRoute
   '/admin/pages': typeof AuthenticatedAdminPagesRoute
+  '/admin/pincodes': typeof AuthenticatedAdminPincodesRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/admin/shipping': typeof AuthenticatedAdminShippingRoute
   '/admin/taxes': typeof AuthenticatedAdminTaxesRoute
@@ -266,6 +275,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/fees': typeof AuthenticatedAdminFeesRoute
   '/_authenticated/admin/orders': typeof AuthenticatedAdminOrdersRoute
   '/_authenticated/admin/pages': typeof AuthenticatedAdminPagesRoute
+  '/_authenticated/admin/pincodes': typeof AuthenticatedAdminPincodesRoute
   '/_authenticated/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/_authenticated/admin/shipping': typeof AuthenticatedAdminShippingRoute
   '/_authenticated/admin/taxes': typeof AuthenticatedAdminTaxesRoute
@@ -297,6 +307,7 @@ export interface FileRouteTypes {
     | '/admin/fees'
     | '/admin/orders'
     | '/admin/pages'
+    | '/admin/pincodes'
     | '/admin/settings'
     | '/admin/shipping'
     | '/admin/taxes'
@@ -323,6 +334,7 @@ export interface FileRouteTypes {
     | '/admin/fees'
     | '/admin/orders'
     | '/admin/pages'
+    | '/admin/pincodes'
     | '/admin/settings'
     | '/admin/shipping'
     | '/admin/taxes'
@@ -353,6 +365,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/fees'
     | '/_authenticated/admin/orders'
     | '/_authenticated/admin/pages'
+    | '/_authenticated/admin/pincodes'
     | '/_authenticated/admin/settings'
     | '/_authenticated/admin/shipping'
     | '/_authenticated/admin/taxes'
@@ -524,6 +537,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminPagesRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/pincodes': {
+      id: '/_authenticated/admin/pincodes'
+      path: '/pincodes'
+      fullPath: '/admin/pincodes'
+      preLoaderRoute: typeof AuthenticatedAdminPincodesRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/_authenticated/admin/settings': {
       id: '/_authenticated/admin/settings'
       path: '/settings'
@@ -597,6 +617,7 @@ interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminFeesRoute: typeof AuthenticatedAdminFeesRoute
   AuthenticatedAdminOrdersRoute: typeof AuthenticatedAdminOrdersRoute
   AuthenticatedAdminPagesRoute: typeof AuthenticatedAdminPagesRoute
+  AuthenticatedAdminPincodesRoute: typeof AuthenticatedAdminPincodesRoute
   AuthenticatedAdminSettingsRoute: typeof AuthenticatedAdminSettingsRoute
   AuthenticatedAdminShippingRoute: typeof AuthenticatedAdminShippingRoute
   AuthenticatedAdminTaxesRoute: typeof AuthenticatedAdminTaxesRoute
@@ -614,6 +635,7 @@ const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminFeesRoute: AuthenticatedAdminFeesRoute,
   AuthenticatedAdminOrdersRoute: AuthenticatedAdminOrdersRoute,
   AuthenticatedAdminPagesRoute: AuthenticatedAdminPagesRoute,
+  AuthenticatedAdminPincodesRoute: AuthenticatedAdminPincodesRoute,
   AuthenticatedAdminSettingsRoute: AuthenticatedAdminSettingsRoute,
   AuthenticatedAdminShippingRoute: AuthenticatedAdminShippingRoute,
   AuthenticatedAdminTaxesRoute: AuthenticatedAdminTaxesRoute,

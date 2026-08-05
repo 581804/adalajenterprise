@@ -11,7 +11,8 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "db:init": "tsx scripts/init-db.ts",
-    "db:fix-currency": "tsx scripts/fix-currency.ts"
+    "db:fix-currency": "tsx scripts/fix-currency.ts",
+    "db:seed-country-codes": "tsx scripts/seed-country-codes.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -53,12 +54,15 @@
     "date-fns": "^4.1.0",
     "embla-carousel-react": "^8.6.0",
     "google-auth-library": "^10.9.1",
+    "i18n-iso-countries": "^7.14.0",
     "input-otp": "^1.4.2",
     "jsonwebtoken": "^9.0.3",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
+    "libphonenumber-js": "^1.13.10",
     "lucide-react": "^0.575.0",
     "mongoose": "^9.8.1",
+    "papaparse": "^5.5.4",
     "react": "^19.2.0",
     "react-day-picker": "^9.14.0",
     "react-dom": "^19.2.0",
@@ -78,6 +82,7 @@
     "@lovable.dev/vite-tanstack-config": "2.7.7",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.16.5",
+    "@types/papaparse": "^5.5.2",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.2.0",

@@ -15,6 +15,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { formatMoney } from "@/lib/format";
+import { PincodeAddressFields } from "@/components/pincode-address-fields";
+import { PhoneInput } from "@/components/phone-input";
+import { isValidPhoneForCountry, toE164 } from "@/lib/phone";
 
 export const Route = createFileRoute("/checkout")({
   component: CheckoutPage,
@@ -40,6 +43,7 @@ function CheckoutPage() {
     full_name: "", email: user?.email ?? "",
     line1: "", line2: "", city: "", region: "", postal_code: "", country: "", phone: "",
   });
+  const [phoneValue, setPhoneValue] = useState<{ iso2: string; local: string }>({ iso2: "IN", local: "" });
   useEffect(() => {
     if (user?.email && !form.email) setForm((f) => ({ ...f, email: user.email! }));
   }, [user]);
@@ -156,11 +160,18 @@ function CheckoutPage() {
 
     const requiredFields: Array<[keyof typeof form, string]> = [
       ["full_name", "Full name"], ["email", "Email"], ["line1", "Address"], ["line2", "Apartment / suite"],
-      ["city", "City"], ["region", "State/Region"], ["postal_code", "Postal code"], ["country", "Country"], ["phone", "Phone"],
+      ["city", "City"], ["region", "State/Region"], ["postal_code", "Postal code"], ["country", "Country"],
     ];
     for (const [key, label] of requiredFields) {
       if (!String(form[key] ?? "").trim()) { toast.error(`${label} is required`); return; }
     }
+    if (!phoneValue.local.trim()) { toast.error("Phone is required"); return; }
+    if (!isValidPhoneForCountry(phoneValue.local, phoneValue.iso2)) {
+      toast.error("Please enter a valid phone number for the selected country");
+      return;
+    }
+    const phoneE164 = toE164(phoneValue.local, phoneValue.iso2);
+    if (!phoneE164) { toast.error("Please enter a valid phone number"); return; } // defensive — shouldn't happen if isValidPhoneForCountry passed
 
     setSubmitting(true);
     try {
@@ -170,7 +181,7 @@ function CheckoutPage() {
           email: form.email,
           shippingAddress: {
             full_name: form.full_name, line1: form.line1, line2: form.line2, city: form.city,
-            region: form.region, postal_code: form.postal_code, country: form.country, phone: form.phone,
+            region: form.region, postal_code: form.postal_code, country: form.country, phone: phoneE164,
           },
           shippingZoneId: selectedShipping?.zoneId ?? null,
           shippingRateId: selectedShipping?.id ?? null,
@@ -219,11 +230,16 @@ function CheckoutPage() {
               <div><Label>Email *</Label><Input type="email" value={form.email} onChange={upd("email")} required /></div>
               <div className="md:col-span-2"><Label>Address *</Label><Input value={form.line1} onChange={upd("line1")} required /></div>
               <div className="md:col-span-2"><Label>Apartment / suite *</Label><Input value={form.line2} onChange={upd("line2")} required /></div>
+              <div className="md:col-span-2">
+                <PincodeAddressFields
+                  value={{ postal_code: form.postal_code, city: form.city, region: form.region, country: form.country }}
+                  onChange={(next) => setForm((f) => ({ ...f, postal_code: next.postal_code, city: next.city, region: next.region, country: next.country }))}
+                />
+              </div>
               <div><Label>City *</Label><Input value={form.city} onChange={upd("city")} required /></div>
               <div><Label>State/Region *</Label><Input value={form.region} onChange={upd("region")} required /></div>
-              <div><Label>Postal code *</Label><Input value={form.postal_code} onChange={upd("postal_code")} required /></div>
               <div><Label>Country *</Label><Input value={form.country} onChange={upd("country")} required /></div>
-              <div><Label>Phone *</Label><Input value={form.phone} onChange={upd("phone")} required /></div>
+              <div><PhoneInput value={phoneValue} onChange={setPhoneValue} required /></div>
             </div>
 
             {form.country ? (

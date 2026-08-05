@@ -14,6 +14,7 @@
 // checkout.tsx so the displayed preview and the actually-stored order agree.
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { isValidPhoneNumber } from "libphonenumber-js";
 import { requireAuth, requireAdmin } from "./auth-middleware";
 import { ORDER_STATUSES } from "./models/order.server";
 import { previewDiscount, redeemDiscount } from "./discount-logic.server";
@@ -81,7 +82,24 @@ const addressInput = z.object({
   region: z.string().optional().nullable(),
   postal_code: z.string().min(1),
   country: z.string().min(1),
-  phone: z.string().optional().nullable(),
+  // Must already be in E.164 format (e.g. "+919876543210") by the time it
+  // reaches here — the client resolves the local number + selected country
+  // into E.164 before submitting. Re-validated here (not just "non-empty")
+  // because client-side validation can always be bypassed by a modified
+  // client calling this server function directly.
+  phone: z
+    .string()
+    .min(1)
+    .refine(
+      (val) => {
+        try {
+          return isValidPhoneNumber(val);
+        } catch {
+          return false;
+        }
+      },
+      { message: "Phone number is not a valid E.164 number" },
+    ),
 });
 
 const createOrderInput = z.object({
