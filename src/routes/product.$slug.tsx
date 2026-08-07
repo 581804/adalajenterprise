@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { useCart } from "@/components/cart-provider";
 import { formatMoney } from "@/lib/format";
 import { useSiteSettingsOptional } from "@/hooks/use-site-settings";
+import { SanitizedHtml } from "@/components/sanitized-html";
 
 export const Route = createFileRoute("/product/$slug")({
   component: ProductPage,
@@ -150,9 +151,9 @@ function ProductPage() {
             </div>
 
             {product.description ? (
-              <div className="mt-8 prose prose-sm">
+              <div className="mt-8 prose prose-sm max-w-none">
                 <h3 className="font-semibold mb-2">Description</h3>
-                <div className="whitespace-pre-wrap text-muted-foreground">{product.description}</div>
+                <SanitizedHtml html={product.description} className="text-muted-foreground" />
               </div>
             ) : null}
           </div>

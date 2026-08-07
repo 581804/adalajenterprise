@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { slugify } from "@/lib/format";
+import { SanitizedHtml } from "@/components/sanitized-html";
 import { Trash2, Upload, Plus } from "lucide-react";
 
 type Product = any;
@@ -134,7 +135,21 @@ export function ProductEditor({ initial, onSaved }: { initial: Product | null; o
         <div><Label>Title</Label><Input value={p.title} onChange={upd("title")} /></div>
         <div><Label>Slug</Label><Input value={p.slug} onChange={upd("slug")} placeholder="auto from title" /></div>
         <div className="md:col-span-2"><Label>Short description</Label><Input value={p.short_description ?? ""} onChange={upd("short_description")} /></div>
-        <div className="md:col-span-2"><Label>Description</Label><Textarea rows={6} value={p.description ?? ""} onChange={upd("description")} /></div>
+        <div className="md:col-span-2">
+          <Label>Description</Label>
+          <Textarea rows={6} value={p.description ?? ""} onChange={upd("description")} />
+          <p className="text-xs text-muted-foreground mt-1">
+            HTML tags are supported (e.g. &lt;p&gt;, &lt;strong&gt;, &lt;ul&gt;&lt;li&gt;, &lt;a href&gt;) and will
+            render as formatted text on the product page. Scripts and unsafe attributes are stripped
+            automatically. Preview below shows exactly what customers will see.
+          </p>
+          {p.description ? (
+            <div className="mt-2 border rounded-md p-3 bg-muted/30">
+              <p className="text-xs font-medium text-muted-foreground mb-2">Preview</p>
+              <SanitizedHtml html={p.description} className="prose prose-sm max-w-none" />
+            </div>
+          ) : null}
+        </div>
         <div>
           <Label>Price (₹)</Label>
           <Input type="number" step="0.01" min="0" value={p._price}
