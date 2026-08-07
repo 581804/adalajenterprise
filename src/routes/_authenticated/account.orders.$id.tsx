@@ -257,6 +257,7 @@ function OrderDetail() {
             <div>{[addr.city, addr.region, addr.postal_code].filter(Boolean).join(", ")}</div>
             <div>{addr.country}</div>
             {addr.phone ? <div className="mt-1 text-muted-foreground">{addr.phone}</div> : null}
+            {addr.alternate_phone ? <div className="text-xs text-muted-foreground">Alt: {addr.alternate_phone}</div> : null}
           </section>
           <section className="border rounded-lg p-6 text-sm">
             <h2 className="font-semibold mb-2">Billing address</h2>

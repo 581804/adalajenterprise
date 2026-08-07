@@ -44,6 +44,7 @@ function CheckoutPage() {
     line1: "", line2: "", city: "", region: "", postal_code: "", country: "", phone: "",
   });
   const [phoneValue, setPhoneValue] = useState<{ iso2: string; local: string }>({ iso2: "IN", local: "" });
+  const [altPhoneValue, setAltPhoneValue] = useState<{ iso2: string; local: string }>({ iso2: "IN", local: "" });
   useEffect(() => {
     if (user?.email && !form.email) setForm((f) => ({ ...f, email: user.email! }));
   }, [user]);
@@ -165,13 +166,24 @@ function CheckoutPage() {
     for (const [key, label] of requiredFields) {
       if (!String(form[key] ?? "").trim()) { toast.error(`${label} is required`); return; }
     }
-    if (!phoneValue.local.trim()) { toast.error("Phone is required"); return; }
+    if (!phoneValue.local.trim()) { toast.error("Contact no. is required"); return; }
     if (!isValidPhoneForCountry(phoneValue.local, phoneValue.iso2)) {
-      toast.error("Please enter a valid phone number for the selected country");
+      toast.error("Please enter a valid contact number for the selected country");
       return;
     }
     const phoneE164 = toE164(phoneValue.local, phoneValue.iso2);
-    if (!phoneE164) { toast.error("Please enter a valid phone number"); return; } // defensive — shouldn't happen if isValidPhoneForCountry passed
+    if (!phoneE164) { toast.error("Please enter a valid contact number"); return; } // defensive — shouldn't happen if isValidPhoneForCountry passed
+
+    // Alternate contact is optional — only validated if something was
+    // actually typed in it, never blocks submission when left blank.
+    let altPhoneE164: string | null = null;
+    if (altPhoneValue.local.trim()) {
+      if (!isValidPhoneForCountry(altPhoneValue.local, altPhoneValue.iso2)) {
+        toast.error("Please enter a valid alternate contact number, or leave it blank");
+        return;
+      }
+      altPhoneE164 = toE164(altPhoneValue.local, altPhoneValue.iso2);
+    }
 
     setSubmitting(true);
     try {
@@ -182,6 +194,7 @@ function CheckoutPage() {
           shippingAddress: {
             full_name: form.full_name, line1: form.line1, line2: form.line2, city: form.city,
             region: form.region, postal_code: form.postal_code, country: form.country, phone: phoneE164,
+            alternate_phone: altPhoneE164,
           },
           shippingZoneId: selectedShipping?.zoneId ?? null,
           shippingRateId: selectedShipping?.id ?? null,
@@ -240,6 +253,7 @@ function CheckoutPage() {
               <div><Label>State/Region *</Label><Input value={form.region} onChange={upd("region")} required /></div>
               <div><Label>Country *</Label><Input value={form.country} onChange={upd("country")} required /></div>
               <div><PhoneInput value={phoneValue} onChange={setPhoneValue} required /></div>
+              <div><PhoneInput value={altPhoneValue} onChange={setAltPhoneValue} label="Alternate contact no. (optional)" /></div>
             </div>
 
             {form.country ? (

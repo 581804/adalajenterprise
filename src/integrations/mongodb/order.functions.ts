@@ -100,6 +100,23 @@ const addressInput = z.object({
       },
       { message: "Phone number is not a valid E.164 number" },
     ),
+  // Optional — but if a value IS provided, it still must be genuinely valid.
+  // "Optional" means "may be omitted," not "may be garbage."
+  alternate_phone: z
+    .string()
+    .nullable()
+    .optional()
+    .refine(
+      (val) => {
+        if (!val) return true;
+        try {
+          return isValidPhoneNumber(val);
+        } catch {
+          return false;
+        }
+      },
+      { message: "Alternate contact number is not a valid E.164 number" },
+    ),
 });
 
 const createOrderInput = z.object({

@@ -1,6 +1,5 @@
-import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { listCountryCodes } from "@/integrations/mongodb/country-code.functions";
+import { useEffect } from "react";
+import { COUNTRY_CODES } from "@/lib/country-codes";
 import { isValidPhoneForCountry } from "@/lib/phone";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,41 +14,40 @@ export type PhoneValue = {
 export function PhoneInput({
   value,
   onChange,
+  label = "Contact no.",
   defaultIso2 = "IN",
   required,
 }: {
   value: PhoneValue;
   onChange: (next: PhoneValue) => void;
+  label?: string;
   defaultIso2?: string;
   required?: boolean;
 }) {
-  const { data: countries } = useQuery({
-    queryKey: ["country-codes"],
-    queryFn: () => listCountryCodes(),
-    staleTime: Infinity, // this data never changes at runtime — only via the seed script
-  });
-
+  // No database round-trip and no dependency on a seed script having run —
+  // COUNTRY_CODES is static data available synchronously the moment this
+  // component mounts, since calling codes don't change at runtime.
   useEffect(() => {
-    if (!value.iso2 && countries?.length) {
-      onChange({ ...value, iso2: defaultIso2 });
-    }
+    if (!value.iso2) onChange({ ...value, iso2: defaultIso2 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [countries]);
+  }, []);
 
-  const selected = countries?.find((c) => c.iso2 === value.iso2);
+  const selected = COUNTRY_CODES.find((c) => c.iso2 === value.iso2);
   const isValid = value.local ? isValidPhoneForCountry(value.local, value.iso2) : !required;
   const showValidation = value.local.length > 0;
 
   return (
     <div>
-      <Label>Phone {required ? "*" : ""}</Label>
+      <Label>{label} {required ? "*" : ""}</Label>
       <div className="flex gap-2">
-        <Select value={value.iso2} onValueChange={(iso2) => onChange({ ...value, iso2 })}>
+        {/* Defaults to +91 (India) but is a normal, fully interactive
+            selector — anyone can open it and pick a different country. */}
+        <Select value={value.iso2 || defaultIso2} onValueChange={(iso2) => onChange({ ...value, iso2 })}>
           <SelectTrigger className="w-[110px] shrink-0">
-            <SelectValue>{selected ? `+${selected.calling_code}` : "…"}</SelectValue>
+            <SelectValue>{selected ? `+${selected.calling_code}` : `+${COUNTRY_CODES.find((c) => c.iso2 === defaultIso2)?.calling_code ?? ""}`}</SelectValue>
           </SelectTrigger>
           <SelectContent className="max-h-72">
-            {countries?.map((c) => (
+            {COUNTRY_CODES.map((c) => (
               <SelectItem key={c.iso2} value={c.iso2}>
                 {c.name} (+{c.calling_code})
               </SelectItem>

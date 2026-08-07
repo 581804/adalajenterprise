@@ -54,6 +54,7 @@ function formatAddress(addr?: Record<string, any>) {
     [addr.city, addr.region, addr.postal_code].filter(Boolean).join(", "),
     addr.country,
     addr.phone,
+    addr.alternate_phone ? `Alt: ${addr.alternate_phone}` : null,
   ].filter(Boolean);
 }
 
