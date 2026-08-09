@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { getProductCheckoutMeta } from "@/integrations/mongodb/product.functions";
-import { listActiveShippingForCountry } from "@/integrations/mongodb/shipping-zone.functions";
+import { listActiveShippingForPincode } from "@/integrations/mongodb/shipping-zone.functions";
 import { createOrder } from "@/integrations/mongodb/order.functions";
 import { previewDiscountClient } from "@/integrations/mongodb/discount.functions";
 import { SiteHeader } from "@/components/site-header";
@@ -51,9 +51,9 @@ function CheckoutPage() {
   const upd = (k: keyof typeof form) => (e: any) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   const { data: shippingZones } = useQuery({
-    queryKey: ["checkout-shipping", form.country?.trim().toUpperCase()],
-    enabled: !!form.country?.trim(),
-    queryFn: () => listActiveShippingForCountry({ data: { country: form.country.trim().toUpperCase() } }),
+    queryKey: ["checkout-shipping", form.postal_code, form.country?.trim().toUpperCase()],
+    enabled: /^\d{6}$/.test(form.postal_code) || !!form.country?.trim(),
+    queryFn: () => listActiveShippingForPincode({ data: { pincode: form.postal_code.trim(), country: form.country.trim().toUpperCase() || undefined } }),
   });
   const shippingOptions = useMemo(
     () => (shippingZones ?? []).flatMap((z) => z.shipping_rates.map((r) => ({ ...r, zoneId: z.id }))),
@@ -256,7 +256,7 @@ function CheckoutPage() {
               <div><PhoneInput value={altPhoneValue} onChange={setAltPhoneValue} label="Alternate contact no. (optional)" /></div>
             </div>
 
-            {form.country ? (
+            {form.postal_code || form.country ? (
               <div className="pt-4">
                 <h2 className="font-semibold text-lg mb-2">Shipping method</h2>
                 {shippingOptions.length > 0 ? (
@@ -275,7 +275,7 @@ function CheckoutPage() {
                     })}
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground">No shipping options configured for {form.country.toUpperCase()}. Order will ship with no shipping fee — contact us for arrangements.</p>
+                  <p className="text-sm text-muted-foreground">No shipping options configured for this pincode yet. Order will ship with no shipping fee — contact us for arrangements.</p>
                 )}
               </div>
             ) : null}
