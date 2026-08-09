@@ -31,9 +31,26 @@ export const Route = createFileRoute("/_authenticated/admin/shipping")({
 const IMPORT_BATCH_SIZE = 2000;
 const EXPORT_PAGE_SIZE = 5000;
 
+type EditableRate = {
+  id?: string;
+  name: string;
+  price_cents: number;
+  min_order_cents?: number;
+  free_over_cents?: number | null;
+  estimated_days?: string | null;
+  is_active: boolean;
+};
+type EditableZone = {
+  id?: string;
+  name: string;
+  countries: string[];
+  is_active: boolean;
+  rates: EditableRate[];
+};
+
 function AdminShipping() {
   const qc = useQueryClient();
-  const [editingZone, setEditingZone] = useState<any | null>(null);
+  const [editingZone, setEditingZone] = useState<EditableZone | null>(null);
   const [zoneDialogOpen, setZoneDialogOpen] = useState(false);
   const [managingZone, setManagingZone] = useState<any | null>(null);
 
@@ -70,7 +87,16 @@ function AdminShipping() {
     setZoneDialogOpen(true);
   };
   const openEditZone = (z: any) => {
-    setEditingZone(JSON.parse(JSON.stringify(z))); // deep copy so cancel doesn't mutate the list in place
+    // The zone list returns the field as `shipping_rates` (see serializeZone
+    // in shipping-zone.functions.ts) — this dialog's local state and all its
+    // handlers (addRate/updateRate/removeRate, the rendering below, and
+    // saveZone's payload) consistently use `rates` instead. Without this
+    // remap, editingZone.rates was undefined, which crashed on the .map()
+    // below — and worse, saveZone's `z.rates ?? []` fallback meant saving
+    // would have silently wiped every rate on the zone if the crash hadn't
+    // stopped it first.
+    const deepCopy = JSON.parse(JSON.stringify(z));
+    setEditingZone({ ...deepCopy, rates: deepCopy.shipping_rates ?? [] });
     setZoneDialogOpen(true);
   };
 
