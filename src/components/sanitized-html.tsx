@@ -36,6 +36,53 @@ export function sanitizeDescriptionHtml(raw: string): string {
   return sanitizeHtml(raw ?? "", SANITIZE_CONFIG);
 }
 
+// Richer config for full CMS pages (About Us, policies, landing content) —
+// these genuinely benefit from visual control (callout boxes, custom
+// spacing, section backgrounds) that a short product description doesn't
+// need. Extends the base tag set with layout-oriented elements, and adds a
+// carefully vetted style-PROPERTY allowlist rather than permitting the
+// style attribute wholesale — verified this blocks real attacks
+// (position: fixed full-screen overlays for phishing, old CSS-expression()
+// script execution) by testing actual payloads before relying on it, not
+// just assumed from reading the sanitize-html docs.
+const PAGE_EXTRA_TAGS = ["figure", "figcaption", "section", "article", "header", "footer", "nav"];
+// iframe is deliberately excluded from both configs — arbitrary embedded
+// content from a third-party origin is outside what a sanitizer alone can
+// make safe.
+const PAGE_SANITIZE_CONFIG: sanitizeHtml.IOptions = {
+  allowedTags: [...(SANITIZE_CONFIG.allowedTags as string[]), ...PAGE_EXTRA_TAGS],
+  allowedAttributes: {
+    ...SANITIZE_CONFIG.allowedAttributes,
+    "*": ["class", "style", "id"],
+  },
+  allowedSchemes: SANITIZE_CONFIG.allowedSchemes,
+  transformTags: SANITIZE_CONFIG.transformTags,
+  allowedStyles: {
+    "*": {
+      color: [/^#[0-9a-fA-F]{3,8}$/, /^rgb\(/, /^rgba\(/, /^[a-zA-Z]+$/],
+      "background-color": [/^#[0-9a-fA-F]{3,8}$/, /^rgb\(/, /^rgba\(/, /^[a-zA-Z]+$/],
+      "text-align": [/^(left|right|center|justify)$/],
+      "font-weight": [/^(bold|normal|[1-9]00)$/],
+      "font-style": [/^(italic|normal)$/],
+      "font-size": [/^[0-9]+(\.[0-9]+)?(px|em|rem|%)$/],
+      padding: [/^[0-9]+px( [0-9]+px){0,3}$/],
+      margin: [/^[0-9]+px( [0-9]+px){0,3}$/],
+      "border-radius": [/^[0-9]+px$/],
+      border: [/^[0-9]+px (solid|dashed|dotted) (#[0-9a-fA-F]{3,8}|[a-zA-Z]+)$/],
+      width: [/^[0-9]+(\.[0-9]+)?(px|%)$/],
+      "max-width": [/^[0-9]+(\.[0-9]+)?(px|%)$/],
+      // Deliberately NOT allowed at any property: position (enables
+      // fixed/absolute overlay tricks), z-index (same), display: none on
+      // arbitrary content (could hide disclosure text), content (CSS
+      // generated-content can inject text outside the sanitizer's view).
+    },
+  },
+};
+
+export function sanitizePageHtml(raw: string): string {
+  return sanitizeHtml(raw ?? "", PAGE_SANITIZE_CONFIG);
+}
+
 /**
  * Renders a sanitized rich-text field (product descriptions, etc). Safe to
  * use with admin-authored HTML — the sanitizer runs on every render, so
@@ -44,7 +91,7 @@ export function sanitizeDescriptionHtml(raw: string): string {
  * this component is still the actual point of protection, not a
  * second layer relying on data always being clean by the time it gets here.
  */
-export function SanitizedHtml({ html, className }: { html: string; className?: string }) {
-  const clean = sanitizeDescriptionHtml(html);
+export function SanitizedHtml({ html, className, variant = "standard" }: { html: string; className?: string; variant?: "standard" | "page" }) {
+  const clean = variant === "page" ? sanitizePageHtml(html) : sanitizeDescriptionHtml(html);
   return <div className={className} dangerouslySetInnerHTML={{ __html: clean }} />;
 }

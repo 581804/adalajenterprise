@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { slugify } from "@/lib/format";
+import { SanitizedHtml } from "@/components/sanitized-html";
 import { Plus, Trash2, Pencil } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin/pages")({
@@ -50,7 +51,24 @@ function AdminPages() {
               <div className="space-y-3">
                 <div><Label>Title</Label><Input value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })} /></div>
                 <div><Label>Slug</Label><Input value={editing.slug} onChange={(e) => setEditing({ ...editing, slug: e.target.value })} placeholder="auto" /></div>
-                <div><Label>Body</Label><Textarea rows={10} value={editing.body} onChange={(e) => setEditing({ ...editing, body: e.target.value })} /></div>
+                <div>
+                  <Label>Body</Label>
+                  <Textarea rows={10} value={editing.body} onChange={(e) => setEditing({ ...editing, body: e.target.value })} />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    HTML is supported, including inline styles for colors, spacing, alignment, and
+                    borders (e.g. &lt;div style="background-color:#f5f5f5;padding:16px;border-radius:8px"&gt;)
+                    — good for callout boxes and custom sections. Scripts and unsafe attributes are
+                    stripped automatically. Preview below shows exactly what visitors will see.
+                  </p>
+                  {editing.body ? (
+                    <div className="mt-2 border rounded-md p-4 bg-muted/30">
+                      <p className="text-xs font-medium text-muted-foreground mb-2">Preview</p>
+                      <div className="prose prose-sm max-w-none bg-background rounded p-3">
+                        <SanitizedHtml html={editing.body} variant="page" />
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
                 <div className="flex items-center gap-2"><Switch checked={editing.is_published} onCheckedChange={(v) => setEditing({ ...editing, is_published: v })} /><Label>Published</Label></div>
               </div>
             ) : null}

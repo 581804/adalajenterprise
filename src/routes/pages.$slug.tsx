@@ -4,6 +4,7 @@ import { getPageBySlug } from "@/integrations/mongodb/page.functions";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { buildSeoHead, stripHtmlForMeta } from "@/lib/seo";
+import { SanitizedHtml } from "@/components/sanitized-html";
 
 export const Route = createFileRoute("/pages/$slug")({
   loader: async ({ params }) => {
@@ -44,7 +45,9 @@ function CmsPage() {
         {data ? (
           <>
             <h1 className="text-4xl font-bold mb-6">{data.title}</h1>
-            <div className="prose max-w-none whitespace-pre-wrap">{data.body}</div>
+            <div className="prose max-w-none">
+              <SanitizedHtml html={data.body} variant="page" />
+            </div>
           </>
         ) : null}
       </main>
