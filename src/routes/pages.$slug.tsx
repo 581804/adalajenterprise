@@ -3,15 +3,33 @@ import { useQuery } from "@tanstack/react-query";
 import { getPageBySlug } from "@/integrations/mongodb/page.functions";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
+import { buildSeoHead, stripHtmlForMeta } from "@/lib/seo";
 
 export const Route = createFileRoute("/pages/$slug")({
+  loader: async ({ params }) => {
+    const page = await getPageBySlug({ data: { slug: params.slug } });
+    if (!page) throw notFound();
+    return { page };
+  },
+  head: ({ loaderData }) => {
+    const page = loaderData?.page;
+    if (!page) return {};
+    const seo = (page.seo ?? {}) as { title?: string; description?: string };
+    const { meta, links } = buildSeoHead({
+      title: seo.title?.trim() || page.title,
+      description: seo.description?.trim() || (page.body ? stripHtmlForMeta(page.body) : undefined),
+    });
+    return { meta, links };
+  },
   component: CmsPage,
 });
 
 function CmsPage() {
   const { slug } = Route.useParams();
+  const loaderData = Route.useLoaderData();
   const { data } = useQuery({
     queryKey: ["page", slug],
+    initialData: loaderData.page,
     queryFn: async () => {
       const result = await getPageBySlug({ data: { slug } });
       if (!result) throw notFound();

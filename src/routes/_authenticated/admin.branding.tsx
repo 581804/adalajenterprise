@@ -62,6 +62,31 @@ function AdminBranding() {
       </section>
 
       <section className="space-y-3">
+        <h2 className="font-semibold">SEO</h2>
+        <p className="text-xs text-muted-foreground -mt-1">
+          Used as the default title/description/preview image for pages that don't set their own
+          (product, category, and CMS pages override these automatically with their own content).
+        </p>
+        <div>
+          <Label>Site title</Label>
+          <Input value={s.seo?.title ?? ""} onChange={(e) => upd("seo", { ...(s.seo ?? {}), title: e.target.value })} placeholder={s.brand_name || "e.g. Adalaj Enterprise — Natural Camphor & More"} />
+        </div>
+        <div>
+          <Label>Meta description</Label>
+          <Textarea rows={2} maxLength={200} value={s.seo?.description ?? ""} onChange={(e) => upd("seo", { ...(s.seo ?? {}), description: e.target.value })} placeholder="Recommended: under 160 characters" />
+          <p className="text-xs text-muted-foreground mt-1">{(s.seo?.description ?? "").length}/160</p>
+        </div>
+        <div>
+          <Label>Social share image (OG image)</Label>
+          <Input value={s.seo?.og_image ?? ""} onChange={(e) => upd("seo", { ...(s.seo ?? {}), og_image: e.target.value })} placeholder="https://…" />
+          <p className="text-xs text-muted-foreground mt-1">Shown as the preview image when the site is shared on WhatsApp, Facebook, etc. Recommended: 1200×630px.</p>
+          {s.seo?.og_image ? (
+            <img src={s.seo.og_image} alt="OG preview" className="mt-2 max-w-xs rounded border" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+          ) : null}
+        </div>
+      </section>
+
+      <section className="space-y-3">
         <h2 className="font-semibold">Currency</h2>
         <div className="grid grid-cols-2 gap-3">
           <div><Label>Currency code</Label><Input value={s.currency ?? ""} onChange={(e) => upd("currency", e.target.value)} /></div>
@@ -191,13 +216,6 @@ function AdminBranding() {
 
         <div><Label>Copyright text</Label><Input placeholder="© {year} {brand}. All rights reserved." value={s.footer?.copyright ?? ""} onChange={(e) => upd("footer", { ...(s.footer ?? {}), copyright: e.target.value })} /></div>
         <p className="text-xs text-muted-foreground">Use <code>{"{year}"}</code> and <code>{"{brand}"}</code> as placeholders.</p>
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="font-semibold">SEO defaults</h2>
-        <div><Label>Title</Label><Input value={s.seo?.title ?? ""} onChange={(e) => upd("seo", { ...(s.seo ?? {}), title: e.target.value })} /></div>
-        <div><Label>Description</Label><Textarea value={s.seo?.description ?? ""} onChange={(e) => upd("seo", { ...(s.seo ?? {}), description: e.target.value })} /></div>
-        <div><Label>OG image URL</Label><Input value={s.seo?.og_image ?? ""} onChange={(e) => upd("seo", { ...(s.seo ?? {}), og_image: e.target.value })} /></div>
       </section>
 
 

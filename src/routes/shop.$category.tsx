@@ -7,17 +7,35 @@ import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { ProductCard } from "@/components/product-card";
 import { useSiteSettingsOptional } from "@/hooks/use-site-settings";
+import { buildSeoHead } from "@/lib/seo";
 
 export const Route = createFileRoute("/shop/$category")({
+  loader: async ({ params }) => {
+    const category = await getCategoryBySlug({ data: { slug: params.category } });
+    if (!category) throw notFound();
+    return { category };
+  },
+  head: ({ loaderData }) => {
+    const category = loaderData?.category;
+    if (!category) return {};
+    const { meta, links } = buildSeoHead({
+      title: `${category.name} — Shop`,
+      description: category.description?.trim() || `Browse our ${category.name} collection.`,
+      image: category.image_url ?? undefined,
+    });
+    return { meta, links };
+  },
   component: CategoryPage,
 });
 
 function CategoryPage() {
   const { category } = Route.useParams();
   const { data: settings } = useSiteSettingsOptional();
+  const loaderData = Route.useLoaderData();
 
   const { data: cat } = useQuery({
     queryKey: ["category", category],
+    initialData: loaderData.category,
     queryFn: async () => {
       const result = await getCategoryBySlug({ data: { slug: category } });
       if (!result) throw notFound();

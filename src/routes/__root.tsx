@@ -68,26 +68,37 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   );
 }
 
+import { getSiteSettings } from "@/integrations/mongodb/site-settings.functions";
+import { buildSeoHead } from "@/lib/seo";
+
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
-  head: () => ({
-    meta: [
-      { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Adalaj Enterprise" },
-      { name: "description", content: "Modern online store" },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
-      { property: "og:title", content: "Adalaj Enterprise" },
-      { name: "twitter:title", content: "Adalaj Enterprise" },
-      { property: "og:description", content: "Modern online store" },
-      { name: "twitter:description", content: "Modern online store" },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/9a99afd8-b2ed-436c-9084-fb1a1b2eb610/id-preview-0ef98d26--0274888e-cb5d-4d2f-97e7-770af014b0c1.lovable.app-1784529893831.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/9a99afd8-b2ed-436c-9084-fb1a1b2eb610/id-preview-0ef98d26--0274888e-cb5d-4d2f-97e7-770af014b0c1.lovable.app-1784529893831.png" },
-    ],
-    links: [
-      { rel: "stylesheet", href: appCss },
-    ],
-  }),
+  loader: async () => {
+    // Root-level SEO fallback (used whenever a specific page doesn't
+    // override title/description/image itself) now comes from the same
+    // site_settings.seo the admin Branding screen already edits, instead
+    // of being hardcoded here — this was the actual root cause of every
+    // page sharing an identical title/description, and of a stale Lovable
+    // preview-environment image URL surviving into production.
+    const settings = await getSiteSettings().catch(() => null);
+    return { settings };
+  },
+  head: ({ loaderData }) => {
+    const settings = loaderData?.settings;
+    const seo = settings?.seo as { title?: string; description?: string; og_image?: string } | undefined;
+    const title = seo?.title?.trim() || settings?.brand_name || "Online Store";
+    const description = seo?.description?.trim() || settings?.tagline || undefined;
+    const image = seo?.og_image?.trim() || undefined;
+
+    const { meta, links } = buildSeoHead({ title, description, image });
+    return {
+      meta: [
+        { charSet: "utf-8" },
+        { name: "viewport", content: "width=device-width, initial-scale=1" },
+        ...meta,
+      ],
+      links: [{ rel: "stylesheet", href: appCss }, ...links],
+    };
+  },
   shellComponent: RootShell,
   component: RootComponent,
   notFoundComponent: NotFoundComponent,

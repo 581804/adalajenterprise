@@ -11,8 +11,27 @@ import { useCart } from "@/components/cart-provider";
 import { formatMoney } from "@/lib/format";
 import { useSiteSettingsOptional } from "@/hooks/use-site-settings";
 import { SanitizedHtml } from "@/components/sanitized-html";
+import { buildSeoHead, stripHtmlForMeta } from "@/lib/seo";
 
 export const Route = createFileRoute("/product/$slug")({
+  loader: async ({ params }) => {
+    const product = await getProductBySlug({ data: { slug: params.slug } });
+    if (!product) throw notFound();
+    return { product };
+  },
+  head: ({ loaderData }) => {
+    const product = loaderData?.product;
+    if (!product) return {};
+    const seo = (product.seo ?? {}) as { title?: string; description?: string };
+    const title = seo.title?.trim() || product.title;
+    const description =
+      seo.description?.trim() ||
+      product.short_description?.trim() ||
+      (product.description ? stripHtmlForMeta(product.description) : undefined);
+    const image = product.images?.[0] ?? undefined;
+    const { meta, links } = buildSeoHead({ title, description, image, type: "product" });
+    return { meta, links };
+  },
   component: ProductPage,
 });
 
@@ -24,8 +43,10 @@ function ProductPage() {
   const [qty, setQty] = useState(1);
   const [selectedImage, setSelectedImage] = useState(0);
 
+  const loaderData = Route.useLoaderData();
   const { data: product, isLoading } = useQuery({
     queryKey: ["product", slug],
+    initialData: loaderData.product,
     queryFn: async () => {
       const result = await getProductBySlug({ data: { slug } });
       if (!result) throw notFound();

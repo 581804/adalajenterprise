@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /account
+Disallow: /checkout
+Disallow: /auth
+
+Sitemap: https://www.adalajenterprise.com/sitemap.xml
