@@ -3,34 +3,74 @@ import { DEFAULT_CURRENCY } from "@/lib/format";
 import { useQuery } from "@tanstack/react-query";
 import { listProducts } from "@/integrations/mongodb/product.functions";
 import { listActiveCategories } from "@/integrations/mongodb/category.functions";
-import { useSiteSettingsOptional } from "@/hooks/use-site-settings";
+import { getSiteSettings } from "@/integrations/mongodb/site-settings.functions";
+import { siteSettingsQuery } from "@/hooks/use-site-settings";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { ProductCard } from "@/components/product-card";
 import { Button } from "@/components/ui/button";
+import { buildSeoHead } from "@/lib/seo";
+import { getCanonicalOrigin } from "@/lib/canonical-origin.server";
 
 export const Route = createFileRoute("/")({
+  // This loader is the actual fix for the root cause: without it, the
+  // homepage's body relied entirely on client-initiated useQuery calls,
+  // which have no data on first render (isLoading: true, data: undefined)
+  // regardless of whether they run during SSR streaming or after
+  // hydration — nothing here previously guaranteed settings/products/
+  // categories were ready before the page rendered. head() already got a
+  // title from a real, awaited loader on the root route; the visible body
+  // never had that same guarantee. This closes that asymmetry.
+  loader: async () => {
+    const [settings, featured, allProducts, categoriesRaw, canonicalOrigin] = await Promise.all([
+      getSiteSettings().catch(() => null),
+      listProducts({ data: { status: "active", featured: true, limit: 8 } }).catch(() => []),
+      listProducts({ data: { status: "active", sort: "newest", limit: 8 } }).catch(() => []),
+      listActiveCategories().catch(() => []),
+      getCanonicalOrigin(),
+    ]);
+    const categories = categoriesRaw.slice(0, 6);
+    return { settings, featured, allProducts, categories, canonicalOrigin };
+  },
+  head: ({ loaderData }) => {
+    const settings = loaderData?.settings;
+    const seo = settings?.seo as { title?: string; description?: string; og_image?: string } | undefined;
+    // Priority order, matching the spec: admin-configured value first, then
+    // a sensible generated fallback, generic platform text only as the
+    // absolute last resort (and only when settings genuinely couldn't load).
+    const title = seo?.title?.trim() || settings?.brand_name || "Online Store";
+    const description = seo?.description?.trim() || settings?.tagline?.trim() || undefined;
+    const image = seo?.og_image?.trim() || undefined;
+    const url = loaderData?.canonicalOrigin ? `${loaderData.canonicalOrigin}/` : undefined;
+    const { meta, links } = buildSeoHead({ title, description, image, url });
+    return { meta, links };
+  },
   component: HomePage,
 });
 
 function HomePage() {
-  const { data: settings } = useSiteSettingsOptional();
+  const loaderData = Route.useLoaderData();
+
+  const { data: settings } = useQuery({ ...siteSettingsQuery, initialData: loaderData.settings ?? undefined });
   const banners = settings?.banners ?? [];
   const hero = banners[0];
 
   const { data: featured } = useQuery({
     queryKey: ["products", "featured"],
     queryFn: () => listProducts({ data: { status: "active", featured: true, limit: 8 } }),
+    initialData: loaderData.featured,
   });
 
   const { data: allProducts } = useQuery({
     queryKey: ["products", "recent"],
     queryFn: () => listProducts({ data: { status: "active", sort: "newest", limit: 8 } }),
+    initialData: loaderData.allProducts,
   });
 
   const { data: categories } = useQuery({
     queryKey: ["categories", "top"],
     queryFn: async () => (await listActiveCategories()).slice(0, 6),
+    initialData: loaderData.categories,
   });
 
   const showFeatured = (featured?.length ?? 0) > 0 ? featured : allProducts;

@@ -8,20 +8,26 @@ import { SiteFooter } from "@/components/site-footer";
 import { ProductCard } from "@/components/product-card";
 import { useSiteSettingsOptional } from "@/hooks/use-site-settings";
 import { buildSeoHead } from "@/lib/seo";
+import { getCanonicalOrigin } from "@/lib/canonical-origin.server";
 
 export const Route = createFileRoute("/shop/$category")({
   loader: async ({ params }) => {
-    const category = await getCategoryBySlug({ data: { slug: params.category } });
+    const [category, canonicalOrigin] = await Promise.all([
+      getCategoryBySlug({ data: { slug: params.category } }),
+      getCanonicalOrigin(),
+    ]);
     if (!category) throw notFound();
-    return { category };
+    return { category, canonicalOrigin };
   },
   head: ({ loaderData }) => {
     const category = loaderData?.category;
     if (!category) return {};
+    const url = loaderData?.canonicalOrigin ? `${loaderData.canonicalOrigin}/shop/${category.slug}` : undefined;
     const { meta, links } = buildSeoHead({
       title: `${category.name} — Shop`,
       description: category.description?.trim() || `Browse our ${category.name} collection.`,
       image: category.image_url ?? undefined,
+      url,
     });
     return { meta, links };
   },

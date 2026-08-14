@@ -3,6 +3,7 @@ import "./lib/error-capture";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 import { handleSitemapRequest } from "./lib/sitemap";
+import { handleRobotsRequest } from "./lib/robots";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -50,6 +51,9 @@ export default {
     const url = new URL(request.url);
     if (url.pathname === "/sitemap.xml") {
       return handleSitemapRequest(url);
+    }
+    if (url.pathname === "/robots.txt") {
+      return handleRobotsRequest(url);
     }
 
     try {

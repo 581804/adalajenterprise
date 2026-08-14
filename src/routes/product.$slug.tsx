@@ -12,12 +12,16 @@ import { formatMoney } from "@/lib/format";
 import { useSiteSettingsOptional } from "@/hooks/use-site-settings";
 import { SanitizedHtml } from "@/components/sanitized-html";
 import { buildSeoHead, stripHtmlForMeta } from "@/lib/seo";
+import { getCanonicalOrigin } from "@/lib/canonical-origin.server";
 
 export const Route = createFileRoute("/product/$slug")({
   loader: async ({ params }) => {
-    const product = await getProductBySlug({ data: { slug: params.slug } });
+    const [product, canonicalOrigin] = await Promise.all([
+      getProductBySlug({ data: { slug: params.slug } }),
+      getCanonicalOrigin(),
+    ]);
     if (!product) throw notFound();
-    return { product };
+    return { product, canonicalOrigin };
   },
   head: ({ loaderData }) => {
     const product = loaderData?.product;
@@ -29,7 +33,8 @@ export const Route = createFileRoute("/product/$slug")({
       product.short_description?.trim() ||
       (product.description ? stripHtmlForMeta(product.description) : undefined);
     const image = product.images?.[0] ?? undefined;
-    const { meta, links } = buildSeoHead({ title, description, image, type: "product" });
+    const url = loaderData?.canonicalOrigin ? `${loaderData.canonicalOrigin}/product/${product.slug}` : undefined;
+    const { meta, links } = buildSeoHead({ title, description, image, url, type: "product" });
     return { meta, links };
   },
   component: ProductPage,

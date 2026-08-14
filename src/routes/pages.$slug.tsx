@@ -4,21 +4,27 @@ import { getPageBySlug } from "@/integrations/mongodb/page.functions";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { buildSeoHead, stripHtmlForMeta } from "@/lib/seo";
+import { getCanonicalOrigin } from "@/lib/canonical-origin.server";
 import { SanitizedHtml } from "@/components/sanitized-html";
 
 export const Route = createFileRoute("/pages/$slug")({
   loader: async ({ params }) => {
-    const page = await getPageBySlug({ data: { slug: params.slug } });
+    const [page, canonicalOrigin] = await Promise.all([
+      getPageBySlug({ data: { slug: params.slug } }),
+      getCanonicalOrigin(),
+    ]);
     if (!page) throw notFound();
-    return { page };
+    return { page, canonicalOrigin };
   },
   head: ({ loaderData }) => {
     const page = loaderData?.page;
     if (!page) return {};
     const seo = (page.seo ?? {}) as { title?: string; description?: string };
+    const url = loaderData?.canonicalOrigin ? `${loaderData.canonicalOrigin}/pages/${page.slug}` : undefined;
     const { meta, links } = buildSeoHead({
       title: seo.title?.trim() || page.title,
       description: seo.description?.trim() || (page.body ? stripHtmlForMeta(page.body) : undefined),
+      url,
     });
     return { meta, links };
   },
