@@ -8,6 +8,8 @@ import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { ProductCard } from "@/components/product-card";
 import { useSiteSettingsOptional } from "@/hooks/use-site-settings";
+import { buildSeoHead } from "@/lib/seo";
+import { getCanonicalOrigin } from "@/lib/canonical-origin.server";
 import {
   Select,
   SelectContent,
@@ -18,10 +20,30 @@ import {
 import { Link } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/shop/")({
+  // Loader owns exactly the DEFAULT view (newest, all categories) — the
+  // same query params the component's useQuery calls start with below.
+  // This is what a crawler with no JS actually sees. Once the person
+  // interacts with the sort/category filters client-side, useQuery takes
+  // over re-fetching for that — a genuine post-load interaction, not an
+  // SSR/crawler concern, so it correctly stays client-driven.
+  loader: async () => {
+    const [products, categories, canonicalOrigin] = await Promise.all([
+      listProducts({ data: { status: "active", sort: "newest", limit: 60 } }).catch(() => []),
+      listActiveCategories().catch(() => []),
+      getCanonicalOrigin(),
+    ]);
+    return { products, categories, canonicalOrigin };
+  },
+  head: ({ loaderData }) => {
+    const url = loaderData?.canonicalOrigin ? `${loaderData.canonicalOrigin}/shop` : undefined;
+    const { meta, links } = buildSeoHead({ title: "Shop — All Products", url });
+    return { meta, links };
+  },
   component: ShopIndex,
 });
 
 function ShopIndex() {
+  const loaderData = Route.useLoaderData();
   const { data: settings } = useSiteSettingsOptional();
   const [sort, setSort] = useState<"newest" | "price_asc" | "price_desc">("newest");
   const [categoryId, setCategoryId] = useState<string>("all");
@@ -29,6 +51,7 @@ function ShopIndex() {
   const { data: categories } = useQuery({
     queryKey: ["categories", "all"],
     queryFn: () => listActiveCategories(),
+    initialData: loaderData.categories,
   });
 
   const { data: products, isLoading } = useQuery({
@@ -37,6 +60,11 @@ function ShopIndex() {
       listProducts({
         data: { status: "active", sort, categoryId: categoryId !== "all" ? categoryId : undefined, limit: 60 },
       }),
+    // initialData only applies to the query's exact starting key (newest +
+    // all categories) — once sort/categoryId change client-side, the key
+    // changes and React Query correctly fetches fresh rather than reusing
+    // stale loader data for a different filter combination.
+    initialData: sort === "newest" && categoryId === "all" ? loaderData.products : undefined,
   });
 
   return (
