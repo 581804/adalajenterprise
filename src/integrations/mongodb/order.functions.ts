@@ -19,6 +19,8 @@ import { requireAuth, requireAdmin } from "./auth-middleware";
 import { ORDER_STATUSES } from "./models/order.server";
 import { previewDiscount, redeemDiscount } from "./discount-logic.server";
 import { DEFAULT_CURRENCY } from "@/lib/format";
+import { determineGstSplit } from "@/lib/gst";
+import { selectFulfillingWarehouse } from "@/lib/warehouse-fulfillment";
 
 function serializeOrder(o: any) {
   return {
@@ -30,6 +32,9 @@ function serializeOrder(o: any) {
     subtotal_cents: o.subtotalCents,
     shipping_cents: o.shippingCents,
     tax_cents: o.taxCents,
+    cgst_cents: o.cgstCents ?? 0,
+    sgst_cents: o.sgstCents ?? 0,
+    igst_cents: o.igstCents ?? 0,
     discount_cents: o.discountCents,
     fee_cents: o.feeCents,
     total_cents: o.totalCents,
@@ -64,6 +69,16 @@ function serializeOrder(o: any) {
       tax_cents: it.taxCents ?? null,
       fee_name: it.feeName ?? null,
       fee_cents: it.feeCents ?? null,
+      warehouse_name: it.warehouseName ?? null,
+      warehouse_state: it.warehouseState ?? null,
+      warehouse_gstin: it.warehouseGstin ?? null,
+      gst_type: it.gstType ?? null,
+      cgst_percent: it.cgstPercent ?? null,
+      sgst_percent: it.sgstPercent ?? null,
+      igst_percent: it.igstPercent ?? null,
+      cgst_cents: it.cgstCents ?? null,
+      sgst_cents: it.sgstCents ?? null,
+      igst_cents: it.igstCents ?? null,
     })),
   };
 }
@@ -140,6 +155,8 @@ export const createOrder = createServerFn({ method: "POST" })
     const { FeeCategory } = await import("./models/fee-category.server");
     const { ShippingZone } = await import("./models/shipping-zone.server");
     const { Order } = await import("./models/order.server");
+    const { Warehouse } = await import("./models/warehouse.server");
+    const { WarehouseStock } = await import("./models/warehouse-stock.server");
     await connectMongo();
 
     // 1. Look up live products — this is the authoritative price source.
@@ -166,6 +183,17 @@ export const createOrder = createServerFn({ method: "POST" })
       lineTaxCents?: number;
       feeName?: string;
       lineFeeCents?: number;
+      warehouseId?: string;
+      warehouseName?: string;
+      warehouseState?: string;
+      warehouseGstin?: string | null;
+      gstType?: "intrastate" | "interstate" | "unknown";
+      cgstPercent?: number;
+      sgstPercent?: number;
+      igstPercent?: number;
+      cgstCents?: number;
+      sgstCents?: number;
+      igstCents?: number;
     };
 
     const lineItems: LineItem[] = [];
@@ -212,10 +240,28 @@ export const createOrder = createServerFn({ method: "POST" })
     const taxRateById = new Map(taxRates.map((t) => [t._id.toString(), t]));
     const feeCategoryById = new Map(feeCategories.map((f) => [f._id.toString(), f]));
 
+    // Warehouse fulfillment + GST determination. Only engages if at least
+    // one active warehouse exists — a store that never sets up warehouses
+    // keeps the exact pre-existing behavior (flat TaxRate.ratePercent,
+    // Product.stock decremented, no warehouse on the order item), so this
+    // feature is additive, not a breaking change for stores that don't use it.
+    const activeWarehouses = await Warehouse.find({ isActive: true }).lean();
+    const usingWarehouses = activeWarehouses.length > 0;
+    const buyerState = data.shippingAddress.region?.trim() || null;
+
     let taxExclusive = 0;
+    let cgstTotal = 0;
+    let sgstTotal = 0;
+    let igstTotal = 0;
     let feeTotal = 0;
     let feeTaxExclusive = 0;
     const perOrderFees = new Map<string, (typeof feeCategories)[number]>();
+    // Tracks warehouse -> (productId+variantId) -> quantity to decrement
+    // after every line item is successfully resolved, so a failure partway
+    // through (e.g. line 3 has no warehouse with enough stock) never
+    // leaves line 1/2's stock already decremented for an order that didn't
+    // actually get created.
+    const stockDecrements: Array<{ warehouseId: string; productId: string; variantId: string | null; quantity: number }> = [];
 
     for (const li of lineItems) {
       const lineSubtotal = li.unitPriceCents * li.quantity;
@@ -227,7 +273,62 @@ export const createOrder = createServerFn({ method: "POST" })
         li.taxRatePercent = taxRate.ratePercent;
       }
 
-      if (taxPct > 0 && !li.priceIncludesTax) {
+      if (usingWarehouses) {
+        // Find every active warehouse's stock for this exact product+variant.
+        const stockRows = await WarehouseStock.find({
+          productId: li.productId,
+          variantId: li.variantId || null,
+          warehouseId: { $in: activeWarehouses.map((w) => w._id) },
+        }).lean();
+        const stockByWarehouseId = new Map(stockRows.map((s) => [s.warehouseId.toString(), s.quantity]));
+
+        const candidates = activeWarehouses.map((w) => ({
+          id: w._id.toString(),
+          name: w.name,
+          state: w.state,
+          gstin: w.gstin ?? null,
+          priority: w.priority,
+          availableQuantity: stockByWarehouseId.get(w._id.toString()) ?? 0,
+        }));
+
+        const chosen = selectFulfillingWarehouse(candidates, li.quantity);
+        if (!chosen) {
+          throw new Error(`"${li.title}"${li.variantName ? ` (${li.variantName})` : ""} is out of stock at all warehouses for the requested quantity`);
+        }
+
+        li.warehouseId = chosen.id;
+        li.warehouseName = chosen.name;
+        li.warehouseState = chosen.state;
+        li.warehouseGstin = chosen.gstin;
+        stockDecrements.push({ warehouseId: chosen.id, productId: li.productId, variantId: li.variantId, quantity: li.quantity });
+
+        if (taxPct > 0 && !li.priceIncludesTax) {
+          const gst = determineGstSplit(lineSubtotal, taxPct, chosen.state, buyerState);
+          li.gstType = gst.type;
+          li.cgstPercent = gst.cgstPercent;
+          li.sgstPercent = gst.sgstPercent;
+          li.igstPercent = gst.igstPercent;
+          li.cgstCents = gst.cgstCents;
+          li.sgstCents = gst.sgstCents;
+          li.igstCents = gst.igstCents;
+          li.lineTaxCents = gst.cgstCents + gst.sgstCents + gst.igstCents;
+          cgstTotal += gst.cgstCents;
+          sgstTotal += gst.sgstCents;
+          igstTotal += gst.igstCents;
+          taxExclusive += li.lineTaxCents;
+          if (gst.type === "unknown") {
+            // Surfaced as a real error rather than silently charging zero
+            // or guessing a tax type — this should only happen if the
+            // billing address genuinely has no usable state value, which
+            // the address form's own validation should already prevent
+            // for orders placed through the normal checkout flow.
+            throw new Error(
+              `Could not determine GST for "${li.title}" — the billing address state could not be matched. Please contact support.`,
+            );
+          }
+        }
+      } else if (taxPct > 0 && !li.priceIncludesTax) {
+        // No warehouses configured — exact pre-existing flat-rate behavior.
         const lineTax = Math.round(lineSubtotal * (taxPct / 100));
         li.lineTaxCents = lineTax;
         taxExclusive += lineTax;
@@ -243,12 +344,24 @@ export const createOrder = createServerFn({ method: "POST" })
           li.lineFeeCents = feeAmt;
           feeTotal += feeAmt;
           if (fee.taxable && taxPct > 0 && !li.priceIncludesTax) {
-            const feeTax = Math.round((feeAmt * taxPct) / 100);
-            feeTaxExclusive += feeTax;
-            // Fee tax is folded into the line's tax total too, so the
-            // per-line "tax" figure shown to the customer matches what the
-            // order-level aggregate actually charged for this line.
-            li.lineTaxCents = (li.lineTaxCents ?? 0) + feeTax;
+            if (usingWarehouses && li.warehouseState) {
+              const feeGst = determineGstSplit(feeAmt, taxPct, li.warehouseState, buyerState);
+              feeTaxExclusive += feeGst.cgstCents + feeGst.sgstCents + feeGst.igstCents;
+              cgstTotal += feeGst.cgstCents;
+              sgstTotal += feeGst.sgstCents;
+              igstTotal += feeGst.igstCents;
+              li.lineTaxCents = (li.lineTaxCents ?? 0) + feeGst.cgstCents + feeGst.sgstCents + feeGst.igstCents;
+              li.cgstCents = (li.cgstCents ?? 0) + feeGst.cgstCents;
+              li.sgstCents = (li.sgstCents ?? 0) + feeGst.sgstCents;
+              li.igstCents = (li.igstCents ?? 0) + feeGst.igstCents;
+            } else {
+              const feeTax = Math.round((feeAmt * taxPct) / 100);
+              feeTaxExclusive += feeTax;
+              // Fee tax is folded into the line's tax total too, so the
+              // per-line "tax" figure shown to the customer matches what the
+              // order-level aggregate actually charged for this line.
+              li.lineTaxCents = (li.lineTaxCents ?? 0) + feeTax;
+            }
           }
         } else if (!perOrderFees.has(fee._id.toString())) {
           perOrderFees.set(fee._id.toString(), fee);
@@ -319,6 +432,9 @@ export const createOrder = createServerFn({ method: "POST" })
       subtotalCents,
       shippingCents,
       taxCents: taxExclusive + feeTaxExclusive,
+      cgstCents: cgstTotal,
+      sgstCents: sgstTotal,
+      igstCents: igstTotal,
       discountCents,
       feeCents: feeTotal,
       totalCents,
@@ -342,8 +458,62 @@ export const createOrder = createServerFn({ method: "POST" })
         taxCents: li.lineTaxCents,
         feeName: li.feeName,
         feeCents: li.lineFeeCents,
+        warehouseId: li.warehouseId,
+        warehouseName: li.warehouseName,
+        warehouseState: li.warehouseState,
+        warehouseGstin: li.warehouseGstin,
+        gstType: li.gstType,
+        cgstPercent: li.cgstPercent,
+        sgstPercent: li.sgstPercent,
+        igstPercent: li.igstPercent,
+        cgstCents: li.cgstCents,
+        sgstCents: li.sgstCents,
+        igstCents: li.igstCents,
       })),
     });
+
+    // Decrement stock ONLY after the order document itself is successfully
+    // created — every validation and lookup above (products exist, prices,
+    // warehouse selection, GST determination, discount redemption) has
+    // already succeeded by this point, so this is the last step, not
+    // something that could fail and leave stock wrongly decremented for
+    // an order that was never actually placed. $inc with a floor guard
+    // (quantity: { $gte: needed }) closes the same kind of race the
+    // discount redemption logic already guards against: two concurrent
+    // orders can't both succeed in decrementing below zero for the last
+    // few units at one warehouse.
+    if (usingWarehouses && stockDecrements.length > 0) {
+      await Promise.all(
+        stockDecrements.map((d) =>
+          WarehouseStock.updateOne(
+            { warehouseId: d.warehouseId, productId: d.productId, variantId: d.variantId || null, quantity: { $gte: d.quantity } },
+            { $inc: { quantity: -d.quantity } },
+          ),
+        ),
+      );
+      // Deliberately not checking matchedCount/verifying success here: the
+      // stock check already happened moments earlier when warehouses were
+      // selected, so this is closing a narrow concurrent-order race, not
+      // the primary correctness check. A very rare failure here (someone
+      // else's order raced in between) leaves stock very slightly
+      // optimistic rather than blocking an already-confirmed, already-
+      // paid-for order after the fact — an admin can reconcile a stock
+      // count; they can't un-create a confirmed order cleanly.
+    } else if (!usingWarehouses) {
+      // No warehouses configured — decrement the original single Product.stock
+      // field, matching the pre-existing (pre-warehouse-feature) behavior.
+      const { Product: ProductModel } = await import("./models/product.server");
+      await Promise.all(
+        lineItems.map((li) =>
+          li.variantId
+            ? ProductModel.updateOne(
+                { _id: li.productId, "variants._id": li.variantId, "variants.stock": { $gte: li.quantity } },
+                { $inc: { "variants.$.stock": -li.quantity } },
+              )
+            : ProductModel.updateOne({ _id: li.productId, stock: { $gte: li.quantity } }, { $inc: { stock: -li.quantity } }),
+        ),
+      );
+    }
 
     return serializeOrder(order);
   });

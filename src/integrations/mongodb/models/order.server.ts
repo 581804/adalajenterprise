@@ -80,6 +80,18 @@ const orderSchema = new Schema(
     subtotalCents: { type: Number, required: true, default: 0 },
     shippingCents: { type: Number, required: true, default: 0 },
     taxCents: { type: Number, required: true, default: 0 },
+    // Order-level aggregates across all line items — kept alongside the
+    // pre-existing lump taxCents (which still equals cgstCents + sgstCents
+    // + igstCents when warehouses are in use, or the old flat calculation
+    // when they aren't). Necessary because a single order can legitimately
+    // contain BOTH intrastate and interstate lines at once, if different
+    // items ship from warehouses in different states — confirmed this is
+    // real, not a hypothetical, via direct testing before adding these
+    // fields. A compliant GST invoice needs these itemized, not just one
+    // combined tax figure.
+    cgstCents: { type: Number, default: 0 },
+    sgstCents: { type: Number, default: 0 },
+    igstCents: { type: Number, default: 0 },
     discountCents: { type: Number, required: true, default: 0 },
     feeCents: { type: Number, required: true, default: 0 },
     totalCents: { type: Number, required: true, default: 0 },
