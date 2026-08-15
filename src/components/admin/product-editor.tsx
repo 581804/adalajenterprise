@@ -5,6 +5,8 @@ import { adminCreateProduct, adminUpdateProduct } from "@/integrations/mongodb/p
 import { adminListCategories } from "@/integrations/mongodb/category.functions";
 import { adminListTaxRates } from "@/integrations/mongodb/tax-rate.functions";
 import { adminListFeeCategories } from "@/integrations/mongodb/fee-category.functions";
+import { adminListWarehouses } from "@/integrations/mongodb/warehouse.functions";
+import { adminGetProductWarehouseStock, adminSetWarehouseStock } from "@/integrations/mongodb/warehouse-stock.functions";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -289,7 +291,90 @@ export function ProductEditor({ initial, onSaved }: { initial: Product | null; o
         </div>
       </div>
 
+      {initial?.id ? <WarehouseStockEditor productId={initial.id} variants={variants} /> : null}
+
       <Button onClick={() => save.mutate()} disabled={save.isPending}>{save.isPending ? "Saving…" : "Save product"}</Button>
+    </div>
+  );
+}
+
+function WarehouseStockEditor({ productId, variants }: { productId: string; variants: any[] }) {
+  const qc = useQueryClient();
+  const { data: warehouses } = useQuery({
+    queryKey: ["admin", "warehouses"],
+    queryFn: () => adminListWarehouses(),
+  });
+  const { data: stockRows } = useQuery({
+    queryKey: ["admin", "warehouse-stock", productId],
+    queryFn: () => adminGetProductWarehouseStock({ data: { productId } }),
+  });
+
+  const setStock = useMutation({
+    mutationFn: (input: { warehouseId: string; variantId: string | null; quantity: number }) =>
+      adminSetWarehouseStock({ data: { productId, ...input } }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "warehouse-stock", productId] });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  if (!warehouses?.length) {
+    return (
+      <div className="border-t pt-6">
+        <h3 className="font-semibold mb-2">Warehouse stock</h3>
+        <p className="text-xs text-muted-foreground">
+          No warehouses configured yet — this product uses the single "Stock" field above.
+          Set up warehouses under Admin → Warehouses to track stock per location instead.
+        </p>
+      </div>
+    );
+  }
+
+  const rowsFor = (variantId: string | null) =>
+    warehouses.map((w: any) => {
+      const existing = stockRows?.find((s: any) => s.warehouse_id === w.id && s.variant_id === variantId);
+      return { warehouse: w, quantity: existing?.quantity ?? 0 };
+    });
+
+  const StockGrid = ({ variantId, label }: { variantId: string | null; label?: string }) => (
+    <div className="space-y-1">
+      {label ? <p className="text-xs font-medium text-muted-foreground">{label}</p> : null}
+      {rowsFor(variantId).map(({ warehouse, quantity }) => (
+        <div key={warehouse.id} className="flex items-center justify-between gap-3 text-sm">
+          <span className="text-muted-foreground">{warehouse.name} ({warehouse.state})</span>
+          <Input
+            type="number"
+            min={0}
+            className="w-24 h-8"
+            defaultValue={quantity}
+            onBlur={(e) => {
+              const next = Number(e.target.value) || 0;
+              if (next !== quantity) setStock.mutate({ warehouseId: warehouse.id, variantId, quantity: next });
+            }}
+          />
+        </div>
+      ))}
+    </div>
+  );
+
+  return (
+    <div className="border-t pt-6 space-y-4">
+      <div>
+        <h3 className="font-semibold">Warehouse stock</h3>
+        <p className="text-xs text-muted-foreground mt-1">
+          Total stock across all warehouses is used for availability checks at checkout. The single "Stock"
+          field above is ignored once warehouses are configured, so keep this section up to date instead.
+        </p>
+      </div>
+      {variants.length > 0 ? (
+        <div className="space-y-4">
+          {variants.map((v, i) => (
+            <StockGrid key={v.id ?? i} variantId={v.id ?? null} label={v.name || `Variant ${i + 1}`} />
+          ))}
+        </div>
+      ) : (
+        <StockGrid variantId={null} />
+      )}
     </div>
   );
 }

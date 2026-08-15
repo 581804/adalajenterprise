@@ -32,6 +32,7 @@ import {
   LogOut,
   ExternalLink,
   MapPin,
+  Warehouse,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -48,6 +49,7 @@ const items = [
   { title: "Discounts", url: "/admin/discounts", icon: Tag },
   { title: "Shipping", url: "/admin/shipping", icon: Truck },
   { title: "Pincodes", url: "/admin/pincodes", icon: MapPin },
+  { title: "Warehouses", url: "/admin/warehouses", icon: Warehouse },
   { title: "Taxes", url: "/admin/taxes", icon: Percent },
   { title: "Fees", url: "/admin/fees", icon: Receipt },
   { title: "Pages", url: "/admin/pages", icon: FileText },

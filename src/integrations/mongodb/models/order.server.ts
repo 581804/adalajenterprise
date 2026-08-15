@@ -39,6 +39,25 @@ const orderItemSchema = new Schema(
     taxCents: { type: Number },
     feeName: { type: String },
     feeCents: { type: Number },
+    // Which warehouse fulfills this line item — determines the GST split
+    // below (seller state = this warehouse's state). Nullable: an order
+    // placed before multi-warehouse existed, or a store that never set up
+    // warehouses, has no warehouse assignment and no GST split; the
+    // invoice falls back to the pre-existing single tax_cents field for
+    // those. A frozen snapshot of the warehouse's name/state/GSTIN at
+    // order time, not a live reference — if the warehouse's address is
+    // edited later, past invoices must not retroactively change.
+    warehouseId: { type: Schema.Types.ObjectId, ref: "Warehouse" },
+    warehouseName: { type: String },
+    warehouseState: { type: String },
+    warehouseGstin: { type: String },
+    gstType: { type: String, enum: ["intrastate", "interstate", "unknown"] },
+    cgstPercent: { type: Number },
+    sgstPercent: { type: Number },
+    igstPercent: { type: Number },
+    cgstCents: { type: Number },
+    sgstCents: { type: Number },
+    igstCents: { type: Number },
   },
   { timestamps: { createdAt: true, updatedAt: false } },
 );
