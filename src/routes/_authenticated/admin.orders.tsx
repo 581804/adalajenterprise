@@ -118,7 +118,15 @@ function OrderDetail({ order, onSave }: { order: any; onSave: (patch: any) => vo
         <div>Subtotal: {formatMoney(order.subtotal_cents, order.currency)}</div>
         <div>Shipping{order.shipping_method ? ` (${order.shipping_method})` : ""}: {formatMoney(order.shipping_cents, order.currency)}</div>
         {order.fee_cents > 0 ? <div>Fees: {formatMoney(order.fee_cents, order.currency)}</div> : null}
-        <div>Tax: {formatMoney(order.tax_cents, order.currency)}</div>
+        {order.cgst_cents > 0 || order.sgst_cents > 0 || order.igst_cents > 0 ? (
+          <>
+            {order.cgst_cents > 0 ? <div>CGST: {formatMoney(order.cgst_cents, order.currency)}</div> : null}
+            {order.sgst_cents > 0 ? <div>SGST: {formatMoney(order.sgst_cents, order.currency)}</div> : null}
+            {order.igst_cents > 0 ? <div>IGST: {formatMoney(order.igst_cents, order.currency)}</div> : null}
+          </>
+        ) : (
+          <div>Tax: {formatMoney(order.tax_cents, order.currency)}</div>
+        )}
         <div className="font-bold">Total: {formatMoney(order.total_cents, order.currency)}</div>
       </div>
 

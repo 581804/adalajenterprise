@@ -219,11 +219,18 @@ function OrderDetail() {
                   {i.tax_cents != null || i.fee_cents != null ? (
                     <div className="text-xs text-muted-foreground mt-1 space-x-3">
                       {i.tax_cents != null ? (
-                        <span>{i.tax_rate_name ? `${i.tax_rate_name} (${i.tax_rate_percent}%)` : "Tax"}: {formatMoney(i.tax_cents, order.currency)}</span>
+                        i.gst_type === "intrastate" ? (
+                          <span>CGST {i.cgst_percent}% + SGST {i.sgst_percent}%: {formatMoney(i.tax_cents, order.currency)}</span>
+                        ) : i.gst_type === "interstate" ? (
+                          <span>IGST {i.igst_percent}%: {formatMoney(i.tax_cents, order.currency)}</span>
+                        ) : (
+                          <span>{i.tax_rate_name ? `${i.tax_rate_name} (${i.tax_rate_percent}%)` : "Tax"}: {formatMoney(i.tax_cents, order.currency)}</span>
+                        )
                       ) : null}
                       {i.fee_cents != null ? <span>{i.fee_name ?? "Fee"}: {formatMoney(i.fee_cents, order.currency)}</span> : null}
                     </div>
                   ) : null}
+                  {i.warehouse_name ? <div className="text-xs text-muted-foreground mt-0.5">Ships from: {i.warehouse_name}</div> : null}
                 </div>
                 <div className="text-right">
                   <div className="font-medium">{formatMoney(i.unit_price_cents * i.quantity, order.currency)}</div>
@@ -246,7 +253,15 @@ function OrderDetail() {
             {order.discount_cents > 0 ? <div className="flex justify-between text-primary"><span>Discount{order.discount_code ? ` (${order.discount_code})` : ""}</span><span>−{formatMoney(order.discount_cents, order.currency)}</span></div> : null}
             <div className="flex justify-between"><span>Delivery charges{order.shipping_method ? ` (${order.shipping_method})` : ""}</span><span>{order.shipping_cents === 0 ? "FREE" : formatMoney(order.shipping_cents, order.currency)}</span></div>
             {order.fee_cents > 0 ? <div className="flex justify-between"><span>Other charges</span><span>{formatMoney(order.fee_cents, order.currency)}</span></div> : null}
-            {order.tax_cents > 0 ? <div className="flex justify-between"><span>Tax</span><span>{formatMoney(order.tax_cents, order.currency)}</span></div> : null}
+            {order.cgst_cents > 0 || order.sgst_cents > 0 || order.igst_cents > 0 ? (
+              <>
+                {order.cgst_cents > 0 ? <div className="flex justify-between"><span>CGST</span><span>{formatMoney(order.cgst_cents, order.currency)}</span></div> : null}
+                {order.sgst_cents > 0 ? <div className="flex justify-between"><span>SGST</span><span>{formatMoney(order.sgst_cents, order.currency)}</span></div> : null}
+                {order.igst_cents > 0 ? <div className="flex justify-between"><span>IGST</span><span>{formatMoney(order.igst_cents, order.currency)}</span></div> : null}
+              </>
+            ) : order.tax_cents > 0 ? (
+              <div className="flex justify-between"><span>Tax</span><span>{formatMoney(order.tax_cents, order.currency)}</span></div>
+            ) : null}
             <div className="flex justify-between font-bold pt-2 border-t text-base"><span>Total amount</span><span>{formatMoney(order.total_cents, order.currency)}</span></div>
           </section>
           <section className="border rounded-lg p-6 text-sm">

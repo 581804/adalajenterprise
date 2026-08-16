@@ -11,6 +11,9 @@ type InvoiceOrder = {
   shipping_method?: string | null;
   fee_cents: number;
   tax_cents: number;
+  cgst_cents?: number;
+  sgst_cents?: number;
+  igst_cents?: number;
   discount_cents: number;
   discount_code?: string | null;
   total_cents: number;
@@ -23,6 +26,13 @@ type InvoiceOrder = {
     quantity: number;
     tax_cents?: number | null;
     tax_rate_percent?: number | null;
+    gst_type?: "intrastate" | "interstate" | "unknown" | null;
+    cgst_percent?: number | null;
+    sgst_percent?: number | null;
+    igst_percent?: number | null;
+    warehouse_name?: string | null;
+    warehouse_state?: string | null;
+    warehouse_gstin?: string | null;
   }>;
 };
 
@@ -93,8 +103,35 @@ export function downloadInvoice(order: InvoiceOrder, brand: InvoiceBrand = {}) {
   doc.setFontSize(9);
   doc.text(order.email, pageWidth - 14, 40, { align: "right" });
 
+  // Sold-by / GSTIN info — a real GST invoice requirement. Listed per
+  // distinct warehouse actually involved (not a single header field),
+  // since a multi-warehouse order can legitimately have more than one
+  // seller-of-record for different lines. Deduplicated so an order with
+  // several lines from the same warehouse doesn't repeat it.
+  const distinctSellers = Array.from(
+    new Map(
+      order.order_items
+        .filter((item) => item.warehouse_name)
+        .map((item) => [item.warehouse_name, { name: item.warehouse_name, state: item.warehouse_state, gstin: item.warehouse_gstin }]),
+    ).values(),
+  );
+  let y = 40;
+  if (distinctSellers.length > 0) {
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.text("Sold by", 14, y);
+    doc.setFont("helvetica", "normal");
+    for (const seller of distinctSellers) {
+      y += 5;
+      const parts = [seller.name, seller.state, seller.gstin ? `GSTIN: ${seller.gstin}` : null].filter(Boolean);
+      doc.text(parts.join(" · "), 14, y);
+    }
+    y += 6;
+  } else {
+    y += 8;
+  }
+
   // Addresses
-  let y = 48;
   doc.setFontSize(10);
   doc.setFont("helvetica", "bold");
   doc.text("Billing address", 14, y);
@@ -109,20 +146,30 @@ export function downloadInvoice(order: InvoiceOrder, brand: InvoiceBrand = {}) {
   }
   y += 6 + maxLines * 5 + 8;
 
-  // Line items table — includes a per-line Tax column when the order has
-  // that data (orders placed after per-line tax tracking was added); shows
-  // "—" for older orders where only the order-level aggregate exists.
+  // Line items table. Real GST invoices show CGST/SGST/IGST as separate
+  // columns, not one lump "Tax" — using that convention whenever the order
+  // has GST data (from a warehouse-fulfilled order). Falls back to the
+  // older single Tax column for orders placed before warehouses existed.
+  const hasGstData = order.order_items.some((item) => item.gst_type != null && item.gst_type !== "unknown");
   const hasLineTax = order.order_items.some((item) => item.tax_cents != null);
   autoTable(doc, {
     startY: y,
-    head: hasLineTax
-      ? [["Item", "Qty", "Unit price", "Tax", "Line total"]]
-      : [["Item", "Qty", "Unit price", "Line total"]],
+    head: hasGstData
+      ? [["Item", "Qty", "Unit price", "CGST", "SGST", "IGST", "Line total"]]
+      : hasLineTax
+        ? [["Item", "Qty", "Unit price", "Tax", "Line total"]]
+        : [["Item", "Qty", "Unit price", "Line total"]],
     body: order.order_items.map((item) => {
       const label = item.variant_name ? `${item.title} (${item.variant_name})` : item.title;
       const lineTotal = money(item.unit_price_cents * item.quantity, currency);
       const row = [label, String(item.quantity), money(item.unit_price_cents, currency)];
-      if (hasLineTax) {
+      if (hasGstData) {
+        const isIntrastate = item.gst_type === "intrastate";
+        const isInterstate = item.gst_type === "interstate";
+        row.push(isIntrastate && item.cgst_percent ? `${item.cgst_percent}%` : "—");
+        row.push(isIntrastate && item.sgst_percent ? `${item.sgst_percent}%` : "—");
+        row.push(isInterstate && item.igst_percent ? `${item.igst_percent}%` : "—");
+      } else if (hasLineTax) {
         row.push(
           item.tax_cents != null
             ? `${money(item.tax_cents, currency)}${item.tax_rate_percent ? ` (${item.tax_rate_percent}%)` : ""}`
@@ -155,7 +202,14 @@ export function downloadInvoice(order: InvoiceOrder, brand: InvoiceBrand = {}) {
   row("Subtotal", money(order.subtotal_cents, currency));
   row(order.shipping_method ? `Shipping (${order.shipping_method})` : "Shipping", money(order.shipping_cents, currency));
   if (order.fee_cents > 0) row("Fees", money(order.fee_cents, currency));
-  if (order.tax_cents > 0) row("Tax", money(order.tax_cents, currency));
+  const hasGstAggregates = (order.cgst_cents ?? 0) > 0 || (order.sgst_cents ?? 0) > 0 || (order.igst_cents ?? 0) > 0;
+  if (hasGstAggregates) {
+    if (order.cgst_cents) row("CGST", money(order.cgst_cents, currency));
+    if (order.sgst_cents) row("SGST", money(order.sgst_cents, currency));
+    if (order.igst_cents) row("IGST", money(order.igst_cents, currency));
+  } else if (order.tax_cents > 0) {
+    row("Tax", money(order.tax_cents, currency));
+  }
   if (order.discount_cents > 0) {
     row(order.discount_code ? `Discount (${order.discount_code})` : "Discount", `-${money(order.discount_cents, currency)}`);
   }
