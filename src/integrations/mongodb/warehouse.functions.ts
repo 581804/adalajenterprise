@@ -122,3 +122,34 @@ export const adminDeleteWarehouse = createServerFn({ method: "POST" })
     await Warehouse.findByIdAndDelete(data.id);
     return { success: true };
   });
+
+/**
+ * Checks the actual conditions needed for GST/warehouse tax calculation to
+ * produce anything, and reports exactly which are missing — built because
+ * "no CGST/SGST/IGST shown on an order" has three genuinely different real
+ * causes (no active warehouse, no product has a Tax rate assigned, or a
+ * stock/state mismatch) and there was previously no way to tell which one
+ * applied without reading server code.
+ */
+export const adminCheckGstReadiness = createServerFn({ method: "GET" })
+  .middleware([requireAdmin])
+  .handler(async () => {
+    const { connectMongo } = await import("./client.server");
+    const { Warehouse } = await import("./models/warehouse.server");
+    const { Product } = await import("./models/product.server");
+    const { WarehouseStock } = await import("./models/warehouse-stock.server");
+    await connectMongo();
+
+    const activeWarehouseCount = await Warehouse.countDocuments({ isActive: true });
+    const activeProductsWithTax = await Product.countDocuments({ status: "active", taxRateId: { $ne: null } });
+    const totalActiveProducts = await Product.countDocuments({ status: "active" });
+    const stockRecordCount = await WarehouseStock.countDocuments({ quantity: { $gt: 0 } });
+
+    return {
+      has_active_warehouse: activeWarehouseCount > 0,
+      active_warehouse_count: activeWarehouseCount,
+      products_with_tax_rate: activeProductsWithTax,
+      total_active_products: totalActiveProducts,
+      has_any_stock_configured: stockRecordCount > 0,
+    };
+  });

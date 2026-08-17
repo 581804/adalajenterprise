@@ -7,13 +7,14 @@ import {
   adminCreateWarehouse,
   adminUpdateWarehouse,
   adminDeleteWarehouse,
+  adminCheckGstReadiness,
 } from "@/integrations/mongodb/warehouse.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { Plus, Trash2, Pencil, Warehouse as WarehouseIcon } from "lucide-react";
+import { Plus, Trash2, Pencil, Warehouse as WarehouseIcon, CheckCircle2, AlertTriangle } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin/warehouses")({
   component: AdminWarehouses,
@@ -27,6 +28,11 @@ function AdminWarehouses() {
   const { data: warehouses } = useQuery({
     queryKey: ["admin", "warehouses"],
     queryFn: () => adminListWarehouses(),
+  });
+
+  const { data: readiness } = useQuery({
+    queryKey: ["admin", "gst-readiness"],
+    queryFn: () => adminCheckGstReadiness(),
   });
 
   const save = useMutation({
@@ -103,6 +109,41 @@ function AdminWarehouses() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {readiness ? (
+        <div className={`border rounded-lg p-4 space-y-2 ${readiness.has_active_warehouse && readiness.products_with_tax_rate > 0 ? "border-green-600/30 bg-green-50/50 dark:bg-green-950/20" : "border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/20"}`}>
+          <h2 className="font-semibold text-sm">GST setup checklist</h2>
+          <p className="text-xs text-muted-foreground">
+            No CGST/SGST/IGST shown on an order? Check each of these — all three are required for tax to calculate.
+          </p>
+          <div className="space-y-1.5 text-sm pt-1">
+            <div className="flex items-center gap-2">
+              {readiness.has_active_warehouse ? <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" /> : <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />}
+              <span>
+                {readiness.has_active_warehouse
+                  ? `${readiness.active_warehouse_count} active warehouse${readiness.active_warehouse_count === 1 ? "" : "s"} configured`
+                  : "No active warehouse — add one above, or GST never calculates and the old flat-tax behavior applies instead"}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              {readiness.products_with_tax_rate > 0 ? <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" /> : <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />}
+              <span>
+                {readiness.products_with_tax_rate > 0
+                  ? `${readiness.products_with_tax_rate} of ${readiness.total_active_products} active products have a Tax rate assigned`
+                  : `0 of ${readiness.total_active_products} active products have a Tax rate assigned — edit a product → Tax & fees → set a Tax rate, or no tax applies regardless of warehouses`}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              {readiness.has_any_stock_configured ? <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" /> : <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />}
+              <span>
+                {readiness.has_any_stock_configured
+                  ? "Warehouse stock is configured for at least one product"
+                  : "No warehouse stock configured for any product yet — set stock in the product editor's Warehouse stock section, or every order falls back to the old flat-tax behavior for insufficient stock"}
+              </span>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <div className="border rounded-lg divide-y">
         {warehouses?.map((w: any) => (
           <div key={w.id} className="flex items-center justify-between p-3">

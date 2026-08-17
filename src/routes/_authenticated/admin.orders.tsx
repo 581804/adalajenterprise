@@ -110,7 +110,18 @@ function OrderDetail({ order, onSave }: { order: any; onSave: (patch: any) => vo
         <strong>Items:</strong>
         <ul className="mt-1 space-y-1">
           {order.order_items?.map((i: any) => (
-            <li key={i.id}>{i.title}{i.variant_name ? ` (${i.variant_name})` : ""} × {i.quantity} — {formatMoney(i.unit_price_cents * i.quantity, order.currency)}</li>
+            <li key={i.id}>
+              {i.title}{i.variant_name ? ` (${i.variant_name})` : ""} × {i.quantity} — {formatMoney(i.unit_price_cents * i.quantity, order.currency)}
+              {i.gst_type === "unknown" ? (
+                <span className="block text-xs text-destructive">
+                  ⚠ GST could not be determined — the billing address state didn't match any known state. Contact support to resolve manually.
+                </span>
+              ) : !i.tax_cents ? (
+                <span className="block text-xs text-muted-foreground">
+                  No tax applied — either this product has no Tax rate assigned (Admin → Products → edit this product → Tax & fees), or no active warehouse fulfilled it (Admin → Warehouses).
+                </span>
+              ) : null}
+            </li>
           ))}
         </ul>
       </div>
