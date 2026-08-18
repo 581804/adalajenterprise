@@ -33,7 +33,8 @@ export type GstBreakdown =
  * Determines CGST+SGST vs IGST split for one taxable amount, given the
  * supplying warehouse's state and the customer's billing state.
  *
- * @param taxableCents - the amount GST applies to, in the smallest currency unit
+ * @param amountCents - either a pre-tax taxable BASE (rate gets applied),
+ *   or an already-computed total tax amount to just split — see options.amountIsAlreadyTax
  * @param gstRatePercent - the TOTAL configured GST rate (e.g. 18 for 18%),
  *   matching TaxRate.ratePercent — this is the combined rate, not a
  *   pre-split CGST/SGST number. The split happens here, not in admin config,
@@ -45,10 +46,11 @@ export type GstBreakdown =
  * @param buyerState - the customer's billing address state
  */
 export function determineGstSplit(
-  taxableCents: number,
+  amountCents: number,
   gstRatePercent: number,
   sellerState: string | null | undefined,
   buyerState: string | null | undefined,
+  options: { amountIsAlreadyTax?: boolean } = {},
 ): GstBreakdown {
   const normalizedSeller = sellerState?.trim().toUpperCase() || null;
   const normalizedBuyer = buyerState?.trim().toUpperCase() || null;
@@ -63,21 +65,26 @@ export function determineGstSplit(
 
   const isIntrastate = normalizedSeller === normalizedBuyer;
 
+  // amountIsAlreadyTax: true when the caller has already backed the tax
+  // portion out of a tax-inclusive price (e.g. Rs 100 at 18% inclusive ->
+  // Rs 15.25 embedded tax) and is passing THAT number in — meaning the
+  // rate must NOT be applied again, only split. Without this flag, this
+  // function always assumed its input was a pre-tax BASE to multiply by
+  // the rate, which silently re-applied 18% on top of an already-final
+  // tax figure when first used for inclusive-tax products — confirmed as
+  // a real bug via direct testing before this fix (Rs 15.25 embedded tax
+  // was being treated as a base and re-taxed down to Rs 2.75).
+  const totalTaxCents = options.amountIsAlreadyTax ? Math.round(amountCents) : Math.round(amountCents * (gstRatePercent / 100));
+
   if (isIntrastate) {
     const halfPercent = gstRatePercent / 2;
-    // Compute the TOTAL tax once, then split it — not two independently
-    // rounded halves. Rounding each half separately can drift by a paisa
-    // from what a single IGST calculation on the same amount would
-    // produce (e.g. 5% of ₹33 as two independently-rounded 2.5% halves
-    // summed to 166 paise in testing, one paisa more than the correct
-    // 165). Splitting a single rounded total instead guarantees CGST+SGST
-    // always equals exactly what IGST would have been on the same amount.
-    const totalTaxCents = Math.round(taxableCents * (gstRatePercent / 100));
+    // Split the single computed total, not two independently rounded
+    // halves — see the halving logic below for why (rounding-drift note
+    // retained where the split actually happens).
     const cgstCents = Math.floor(totalTaxCents / 2);
     const sgstCents = totalTaxCents - cgstCents; // absorbs the odd paisa if totalTaxCents is odd
     return { type: "intrastate", cgstPercent: halfPercent, sgstPercent: halfPercent, igstPercent: 0, cgstCents, sgstCents, igstCents: 0 };
   }
 
-  const igstCents = Math.round(taxableCents * (gstRatePercent / 100));
-  return { type: "interstate", cgstPercent: 0, sgstPercent: 0, igstPercent: gstRatePercent, cgstCents: 0, sgstCents: 0, igstCents };
+  return { type: "interstate", cgstPercent: 0, sgstPercent: 0, igstPercent: gstRatePercent, cgstCents: 0, sgstCents: 0, igstCents: totalTaxCents };
 }

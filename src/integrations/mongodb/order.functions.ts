@@ -302,8 +302,19 @@ export const createOrder = createServerFn({ method: "POST" })
         li.warehouseGstin = chosen.gstin;
         stockDecrements.push({ warehouseId: chosen.id, productId: li.productId, variantId: li.variantId, quantity: li.quantity });
 
-        if (taxPct > 0 && !li.priceIncludesTax) {
-          const gst = determineGstSplit(lineSubtotal, taxPct, chosen.state, buyerState);
+        if (taxPct > 0) {
+          // BUG FIX: this used to skip GST-split calculation entirely for
+          // tax-inclusive products (the `!li.priceIncludesTax` guard
+          // ported directly from the old flat-tax logic, without
+          // reconsidering it for GST-split code). Inclusive tax means
+          // "don't add tax on top of the price" — it does NOT mean "don't
+          // report which portion of the price is tax." A GST-inclusive
+          // product still needs its embedded tax correctly split into
+          // CGST/SGST/IGST; only the "add to total" behavior differs.
+          const taxableAmount = li.priceIncludesTax
+            ? Math.round(lineSubtotal * (taxPct / (100 + taxPct))) // back out the embedded tax portion, same formula the checkout preview already used
+            : lineSubtotal;
+          const gst = determineGstSplit(taxableAmount, taxPct, chosen.state, buyerState, { amountIsAlreadyTax: li.priceIncludesTax });
           li.gstType = gst.type;
           li.cgstPercent = gst.cgstPercent;
           li.sgstPercent = gst.sgstPercent;
@@ -315,7 +326,14 @@ export const createOrder = createServerFn({ method: "POST" })
           cgstTotal += gst.cgstCents;
           sgstTotal += gst.sgstCents;
           igstTotal += gst.igstCents;
-          taxExclusive += li.lineTaxCents;
+          // Only ADD to the charged total for exclusive tax — inclusive
+          // tax is already part of unitPriceCents, so adding it again
+          // here would double-charge the customer. It's still reported
+          // (li.cgstCents etc. above) for correct invoice/GST-return
+          // purposes; it just doesn't add to what's actually charged.
+          if (!li.priceIncludesTax) {
+            taxExclusive += li.lineTaxCents;
+          }
           if (gst.type === "unknown") {
             // Surfaced as a real error rather than silently charging zero
             // or guessing a tax type — this should only happen if the
@@ -343,10 +361,10 @@ export const createOrder = createServerFn({ method: "POST" })
           li.feeName = fee.name;
           li.lineFeeCents = feeAmt;
           feeTotal += feeAmt;
-          if (fee.taxable && taxPct > 0 && !li.priceIncludesTax) {
+          if (fee.taxable && taxPct > 0) {
             if (usingWarehouses && li.warehouseState) {
-              const feeGst = determineGstSplit(feeAmt, taxPct, li.warehouseState, buyerState);
-              feeTaxExclusive += feeGst.cgstCents + feeGst.sgstCents + feeGst.igstCents;
+              const feeTaxableAmount = li.priceIncludesTax ? Math.round(feeAmt * (taxPct / (100 + taxPct))) : feeAmt;
+              const feeGst = determineGstSplit(feeTaxableAmount, taxPct, li.warehouseState, buyerState, { amountIsAlreadyTax: li.priceIncludesTax });
               cgstTotal += feeGst.cgstCents;
               sgstTotal += feeGst.sgstCents;
               igstTotal += feeGst.igstCents;
@@ -354,7 +372,13 @@ export const createOrder = createServerFn({ method: "POST" })
               li.cgstCents = (li.cgstCents ?? 0) + feeGst.cgstCents;
               li.sgstCents = (li.sgstCents ?? 0) + feeGst.sgstCents;
               li.igstCents = (li.igstCents ?? 0) + feeGst.igstCents;
-            } else {
+              // Same rule as the product tax above: only add to the
+              // charged total for exclusive tax, since inclusive tax is
+              // already embedded in the fee amount.
+              if (!li.priceIncludesTax) {
+                feeTaxExclusive += feeGst.cgstCents + feeGst.sgstCents + feeGst.igstCents;
+              }
+            } else if (!li.priceIncludesTax) {
               const feeTax = Math.round((feeAmt * taxPct) / 100);
               feeTaxExclusive += feeTax;
               // Fee tax is folded into the line's tax total too, so the
