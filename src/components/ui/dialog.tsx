@@ -38,7 +38,18 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:rounded-lg",
+        // max-h-[90vh] + overflow-y-auto is the actual fix here: without a
+        // height cap, a dialog grows to fit however much content is
+        // inside it, and once that exceeds the viewport, whatever's in
+        // DialogFooter (almost always the Save/Confirm button) gets
+        // pushed off-screen with no way to scroll down to it — confirmed
+        // as a real, reproducible bug (not a hypothetical) via a genuine
+        // report: a long CMS page body pushed the Save button past the
+        // visible window with no scrollbar anywhere to reach it. Capping
+        // height and scrolling the CONTENT internally, rather than
+        // relying on the whole page scrolling, keeps the footer fixed in
+        // view at all times regardless of how long the content grows.
+        "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg max-h-[90vh] translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 overflow-y-auto data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:rounded-lg",
         className,
       )}
       {...props}
